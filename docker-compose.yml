@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: e-cooperative-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: e_cooperative
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_password_123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/setup-database.sql:/docker-entrypoint-initdb.d/setup-database.sql
+    networks:
+      - e-cooperative-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d e_cooperative"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin (Optional - Database Management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: e-cooperative-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ecooperative.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - e-cooperative-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Backend API (Optional - uncomment to run backend in Docker)
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: e-cooperative-backend
+  #   restart: unless-stopped
+  #   environment:
+  #     NODE_ENV: development
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: e_cooperative
+  #     DB_USER: postgres
+  #     DB_PASSWORD: secure_password_123
+  #     JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+  #     FRONTEND_URL: http://localhost:3000
+  #   ports:
+  #     - "5000:5000"
+  #   volumes:
+  #     - ./backend:/app
+  #     - /app/node_modules
+  #   networks:
+  #     - e-cooperative-network
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  e-cooperative-network:
+    driver: bridge
