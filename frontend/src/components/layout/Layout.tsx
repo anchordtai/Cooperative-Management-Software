@@ -26,8 +26,7 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
-import { useDispatch } from 'react-redux';
-import { logout } from '../../store/slices/authSlice';
+import { useAuth } from '../../contexts/AuthContext';
 
 const drawerWidth = 240;
 
@@ -41,7 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
+  const { logout } = useAuth();
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
@@ -65,7 +64,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const handleLogout = () => {
-    dispatch(logout());
+    logout();
     navigate('/login');
   };
 
