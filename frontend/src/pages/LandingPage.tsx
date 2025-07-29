@@ -25,7 +25,7 @@ const navLinks = [
 ];
 
 const Navbar: React.FC = () => {
-  const theme = useTheme();
+  //const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   return (
     <AppBar position="sticky" color="default" elevation={2} sx={{ bgcolor: 'white' }}>
