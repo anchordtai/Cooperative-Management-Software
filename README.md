@@ -6,7 +6,7 @@ E-Cooperative is a React, TypeScript and Material UI application backed by Expre
 
 The foundation supports cooperative administrator registration, email verification, sign-in, rotating sessions, cooperative settings, staff invitations and role permissions, member approval and activation invitations, savings deposits and approved withdrawals, loan applications, approval, disbursement recording, repayment schedules, partial and full repayment, and dashboards based on PostgreSQL records. Member accounts can view their own profile and financial history. The administrative API enforces cooperative scope on each request. Audit history records staff permission changes, loan decisions and financial postings.
 
-The project is in development. Configurable financial products, general-ledger management and financial statements, payment gateways, subscriptions, governance and production acceptance remain open.
+The project is in development. Configurable financial products, general-ledger management and financial statements, live payment settlement, additional gateways, subscriptions, governance and production acceptance remain open.
 
 ## Run locally
 
@@ -26,6 +26,12 @@ Register a cooperative at `/register` and follow the verification link in the em
 - The backend generates monthly instalments, rounds total interest once to the nearest kobo, and allocates repayments to the oldest instalment first, with interest before principal. A recorded repayment reference cannot be used twice on the same loan.
 - Members submit withdrawal requests. Pending requests reserve the amount. An authorised officer rejects the request or records its confirmed payout reference. The backend rechecks the available savings when recording the payout.
 - Deposits, approved withdrawals, disbursements and repayments produce paired debit and credit postings in the same database transaction. The activity report aggregates completed transactions across the full period and supports CSV export.
+
+## Paystack test checkout
+
+Use a disposable database and an explicitly selected test cooperative. Set `PAYSTACK_SECRET_KEY` to a Paystack test key and set `PAYSTACK_TEST_COOPERATIVE_ID` to the test cooperative ID. The test deposit form then appears for its signed-in members. Configure the Paystack test dashboard to send webhooks to `/api/webhooks/paystack` on a publicly reachable staging API. Set `PAYSTACK_WEBHOOK_SECRET` if the dashboard uses a webhook signing secret.
+
+A checkout or browser return leaves the deposit pending until the backend independently verifies the provider result. The backend checks the original reference, amount, currency and test mode before posting a deposit. Webhook retries and repeated manual verification share the same idempotent posting path. Sandbox deposits are test records. Production settlement requires a separate merchant-routing design and live reconciliation verification.
 
 ## Database upgrades
 

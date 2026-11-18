@@ -12,6 +12,7 @@ interface AuditRecord {
 }
 
 const labels: Record<string, string> = {
+  'payment.test_deposit': 'Paystack test deposit verified',
   'staff.invited': 'Staff account invited',
   'staff.permissions_updated': 'Staff access updated',
   'savings.deposit': 'Savings deposit recorded',

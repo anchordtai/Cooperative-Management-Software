@@ -103,30 +103,54 @@ async function migrate() {
     }
 
     const [staff] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '003_staff_and_audit'`);
-    if (staff.length > 0) return;
-    await run(`
-      ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "isActive" boolean NOT NULL DEFAULT true;
-      ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "permissions" text[] NOT NULL DEFAULT '{}';
-      ALTER TABLE "Loans" ADD COLUMN IF NOT EXISTS "requestedBy" uuid;
-      ALTER TABLE "Loans" ADD COLUMN IF NOT EXISTS "decidedBy" uuid;
-      ALTER TABLE "Loans" ADD FOREIGN KEY ("cooperativeId", "requestedBy") REFERENCES "Users" ("cooperativeId", id);
-      ALTER TABLE "Loans" ADD FOREIGN KEY ("cooperativeId", "decidedBy") REFERENCES "Users" ("cooperativeId", id);
+    if (staff.length === 0) {
+      await run(`
+        ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "isActive" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "permissions" text[] NOT NULL DEFAULT '{}';
+        ALTER TABLE "Loans" ADD COLUMN IF NOT EXISTS "requestedBy" uuid;
+        ALTER TABLE "Loans" ADD COLUMN IF NOT EXISTS "decidedBy" uuid;
+        ALTER TABLE "Loans" ADD FOREIGN KEY ("cooperativeId", "requestedBy") REFERENCES "Users" ("cooperativeId", id);
+        ALTER TABLE "Loans" ADD FOREIGN KEY ("cooperativeId", "decidedBy") REFERENCES "Users" ("cooperativeId", id);
 
-      CREATE TABLE "AuditEvents" (
-        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        "cooperativeId" uuid NOT NULL REFERENCES "Cooperatives"(id),
-        "actorId" uuid NOT NULL,
-        action text NOT NULL,
-        "recordId" uuid NOT NULL,
-        details jsonb NOT NULL DEFAULT '{}',
+        CREATE TABLE "AuditEvents" (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          "cooperativeId" uuid NOT NULL REFERENCES "Cooperatives"(id),
+          "actorId" uuid NOT NULL,
+          action text NOT NULL,
+          "recordId" uuid NOT NULL,
+          details jsonb NOT NULL DEFAULT '{}',
+          "createdAt" timestamptz NOT NULL DEFAULT now(),
+          FOREIGN KEY ("cooperativeId", "actorId") REFERENCES "Users" ("cooperativeId", id)
+        );
+        CREATE INDEX audit_events_cooperative_history ON "AuditEvents" ("cooperativeId", id DESC);
+        CREATE TRIGGER immutable_audit_events
+          BEFORE UPDATE OR DELETE ON "AuditEvents"
+          FOR EACH ROW EXECUTE FUNCTION reject_financial_posting_change();
+        INSERT INTO "SchemaMigrations" (version) VALUES ('003_staff_and_audit');
+      `);
+    }
+
+    const [payments] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '004_test_payments'`);
+    if (payments.length > 0) return;
+    await run(`
+      CREATE TABLE "PaymentIntents" (
+        reference varchar(80) PRIMARY KEY,
+        "cooperativeId" uuid NOT NULL,
+        "memberId" uuid NOT NULL,
+        "requestedBy" uuid NOT NULL,
+        provider text NOT NULL CHECK (provider = 'paystack_test'),
+        amount numeric(10,2) NOT NULL CHECK (amount > 0),
+        currency char(3) NOT NULL CHECK (currency = 'NGN'),
+        "transactionId" uuid,
         "createdAt" timestamptz NOT NULL DEFAULT now(),
-        FOREIGN KEY ("cooperativeId", "actorId") REFERENCES "Users" ("cooperativeId", id)
+        "completedAt" timestamptz,
+        FOREIGN KEY ("cooperativeId", "memberId") REFERENCES "Members" ("cooperativeId", id),
+        FOREIGN KEY ("cooperativeId", "requestedBy") REFERENCES "Users" ("cooperativeId", id),
+        FOREIGN KEY ("cooperativeId", "transactionId") REFERENCES "Transactions" ("cooperativeId", id),
+        CHECK (("transactionId" IS NULL) = ("completedAt" IS NULL))
       );
-      CREATE INDEX audit_events_cooperative_history ON "AuditEvents" ("cooperativeId", id DESC);
-      CREATE TRIGGER immutable_audit_events
-        BEFORE UPDATE OR DELETE ON "AuditEvents"
-        FOR EACH ROW EXECUTE FUNCTION reject_financial_posting_change();
-      INSERT INTO "SchemaMigrations" (version) VALUES ('003_staff_and_audit');
+      CREATE INDEX payment_intent_member_history ON "PaymentIntents" ("cooperativeId", "memberId", "createdAt");
+      INSERT INTO "SchemaMigrations" (version) VALUES ('004_test_payments');
     `);
   });
 }

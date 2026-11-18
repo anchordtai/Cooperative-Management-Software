@@ -16,6 +16,7 @@ import reportsRoutes from './routes/reports.routes';
 import staffRoutes from './routes/staff.routes';
 import contactRoutes from './routes/contact.routes';
 import auditRoutes from './routes/audit.routes';
+import paymentsRoutes, { paystackWebhook } from './routes/payments.routes';
 
 jwtSecret();
 const app = express();
@@ -23,6 +24,7 @@ const frontendOrigin = new URL(process.env.FRONTEND_URL || 'http://localhost:300
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
 app.disable('x-powered-by');
 app.use(cors({ origin: frontendOrigin, credentials: true }));
+app.post('/api/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), paystackWebhook);
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
 app.use('/api', (req, res, next) => {
@@ -45,6 +47,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/payments', paymentsRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

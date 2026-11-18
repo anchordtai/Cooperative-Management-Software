@@ -1,4 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@mui/material';
 import { AppearanceButton } from '../components/Appearance';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,6 +30,8 @@ const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN
 
 export default function UserDashboard() {
   const { logout } = useAuth();
+  const [query, setQuery] = useSearchParams();
+  const pendingDeposit = query.get('deposit');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [transactions, setTransactions] = useState<Entry[]>([]);
@@ -38,15 +41,20 @@ export default function UserDashboard() {
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawal, setWithdrawal] = useState('');
   const [loanRate, setLoanRate] = useState<string | null>(null);
+  const [testDeposits, setTestDeposits] = useState(false);
+  const [deposit, setDeposit] = useState('');
+  const [depositBusy, setDepositBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [member, loanList, financialHistory, policy] = await Promise.all([
-      api.get('/members/my'), api.get('/financial/loans/my'), api.get('/transactions/my'), api.get('/financial/loans/policy')
+    const [member, loanList, financialHistory, policy, payments] = await Promise.all([
+      api.get('/members/my'), api.get('/financial/loans/my'), api.get('/transactions/my'),
+      api.get('/financial/loans/policy'), api.get('/payments/config')
     ]);
     setProfile(member.data.data);
     setLoans(loanList.data.data);
     setTransactions(financialHistory.data.data);
     setLoanRate(policy.data.data.loanRate);
+    setTestDeposits(payments.data.data.testDeposits);
   }, []);
 
   useEffect(() => {
@@ -83,6 +91,37 @@ export default function UserDashboard() {
     }
   };
 
+  const startDeposit = async (event: FormEvent) => {
+    event.preventDefault();
+    setDepositBusy(true);
+    try {
+      const { data } = await api.post('/payments/deposit', { amount: deposit });
+      window.location.assign(data.data.checkout);
+    } catch (error: any) {
+      setNotice({ error: true, text: error.response?.data?.message || 'Could not start Paystack test checkout.' });
+      setDepositBusy(false);
+    }
+  };
+
+  const verifyDeposit = async () => {
+    if (!pendingDeposit) return;
+    setDepositBusy(true);
+    try {
+      const { data } = await api.post(`/payments/${encodeURIComponent(pendingDeposit)}/verify`);
+      if (data.data.status === 'completed') {
+        setNotice({ error: false, text: 'The Paystack test deposit was verified.' });
+        setQuery({}, { replace: true });
+        await load();
+      } else {
+        setNotice({ error: false, text: 'Paystack has yet to confirm this test payment.' });
+      }
+    } catch (error: any) {
+      setNotice({ error: true, text: error.response?.data?.message || 'Could not verify the test payment.' });
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
   return (
     <Stack spacing={3} sx={{ maxWidth: 1120, mx: 'auto', p: { xs: 2, sm: 4 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -107,6 +146,15 @@ export default function UserDashboard() {
                   Request withdrawal
                 </Button>
               </Stack>
+              {testDeposits && <Stack component="form" spacing={2} onSubmit={startDeposit} sx={{ mt: 3 }}>
+                <TextField label="Test deposit amount (NGN)" type="number" required
+                  value={deposit} inputProps={{ min: '0.01', step: '0.01' }}
+                  onChange={event => setDeposit(event.target.value)} />
+                <Button type="submit" variant="outlined" disabled={depositBusy}>Open Paystack test checkout</Button>
+              </Stack>}
+              {testDeposits && pendingDeposit && <Button sx={{ mt: 2 }} onClick={verifyDeposit} disabled={depositBusy}>
+                Verify test payment
+              </Button>}
             </CardContent></Card>
           </Grid>
           <Grid item xs={12} md={7}>

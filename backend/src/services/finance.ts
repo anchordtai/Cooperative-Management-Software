@@ -28,7 +28,7 @@ export function requiredTransferReference(value: unknown) {
   return value.trim();
 }
 
-type Account = 'cash' | 'member_savings' | 'loan_principal' | 'interest_income';
+type Account = 'payment_clearing' | 'cash' | 'member_savings' | 'loan_principal' | 'interest_income';
 
 export async function postEntry(
   transaction: DatabaseTransaction, cooperativeId: string, transactionId: string, sequence: number,
