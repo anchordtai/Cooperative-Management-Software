@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import { Sequelize, Options } from 'sequelize';
+import pg from 'pg';
 
 const options: Options = {
   dialect: 'postgres',
+  dialectModule: pg,
   logging: false,
   dialectOptions: process.env.DB_SSL === 'true' ? {
     ssl: {

@@ -50,3 +50,9 @@ Pre-existing records have no reliable cooperative assignment. They are preserved
 Build the frontend with the real `REACT_APP_API_URL` or configure a same-origin `/api` proxy ahead of the SPA fallback. Serve the SPA over HTTPS. Configure `REACT_APP_TERMS_URL` and `REACT_APP_PRIVACY_URL` with your approved policy URLs to display them at signup. Set the backend `FRONTEND_URL` to the corresponding origin, configure PostgreSQL TLS where required, and set all secrets in the deployment environment. Deploy frontend and API on the same site where possible so browsers can send HTTP-only session cookies. For different sites, `COOKIE_CROSS_SITE=true` enables `SameSite=None` with production HTTPS. Browser third-party cookie restrictions can still affect that setup.
 
 Run migrations as a release step. Older provider guides in the repository describe previous configurations. Use the commands and configuration in this README before deploying the current branch.
+
+### Vercel
+
+Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site URL. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. Keep preview environments on an isolated database.
+
+`/api/health` returns HTTP 503 until the database is configured and reachable.
