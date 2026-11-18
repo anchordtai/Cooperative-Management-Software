@@ -64,7 +64,10 @@ app.use('/api/documents', documentsRoutes);
 
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {
-    if (!databaseConfigured) return res.status(503).json({ status: 'unavailable' });
+    if (!databaseConfigured) {
+      res.status(503).json({ status: 'unavailable' });
+      return;
+    }
     await sequelize.authenticate();
     res.json({ status: 'ok' });
   } catch {
