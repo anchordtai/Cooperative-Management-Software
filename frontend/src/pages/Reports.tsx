@@ -1,288 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  CircularProgress,
-  Alert,
-} from '@mui/material';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-import { memberService, loanService, transactionService } from '../services/api';
+import React, { useEffect, useState } from 'react';
+import { Alert, Button, MenuItem, Paper, Skeleton, Stack, TextField, Typography } from '@mui/material';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { saveAs } from 'file-saver';
+import api from '../services/api';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28'];
+interface Activity {
+  month: string;
+  deposits: string;
+  withdrawals: string;
+  disbursements: string;
+  repayments: string;
+}
+const series = [
+  { key: 'deposits', label: 'Deposits', color: '#176b63' },
+  { key: 'withdrawals', label: 'Withdrawals', color: '#93b9b3' },
+  { key: 'disbursements', label: 'Loan disbursements', color: '#354b91' },
+  { key: 'repayments', label: 'Loan repayments', color: '#a3addb' }
+] as const;
+const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
 
-const Reports: React.FC = () => {
-  const [reportType, setReportType] = useState('monthly');
-  const [timeRange, setTimeRange] = useState('year');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [members, setMembers] = useState<any[]>([]);
-  const [loans, setLoans] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-
-  // Aggregated data
-  const [monthlyData, setMonthlyData] = useState<any[]>([]);
-  const [memberStatusData, setMemberStatusData] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [membersRes, loansRes, transactionsRes] = await Promise.all([
-          memberService.getAll(),
-          loanService.getAll(),
-          transactionService.getAll(),
-        ]);
-        setMembers(membersRes.data);
-        setLoans(loansRes.data);
-        setTransactions(transactionsRes.data);
-        setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch report data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+export default function Reports() {
+  const [months, setMonths] = useState('6');
+  const [rows, setRows] = useState<Activity[] | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Aggregate monthly savings and loans
-    const monthly: { [key: string]: { savings: number; loans: number } } = {};
-    const now = new Date();
-    // Only last 12 months
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthly[key] = { savings: 0, loans: 0 };
-    }
-    // Transactions: savings (deposits), loan payments
-    transactions.forEach((tx: any) => {
-      const date = new Date(tx.date);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (monthly[key]) {
-        if (tx.type === 'deposit') monthly[key].savings += Number(tx.amount);
-        if (tx.type === 'loan_payment') monthly[key].loans += Number(tx.amount);
-      }
+    let active = true;
+    setRows(null);
+    setError('');
+    api.get('/reports/activity', { params: { months } }).then(response => {
+      if (active) setRows(response.data.data);
+    }).catch(() => {
+      if (active) setError('Could not load the activity report.');
     });
-    // Loans: count new loans per month
-    loans.forEach((loan: any) => {
-      const date = new Date(loan.createdAt || loan.startDate || loan.date);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (monthly[key]) {
-        monthly[key].loans += Number(loan.amount);
-      }
-    });
-    // Prepare for chart
-    const monthlyArr = Object.entries(monthly)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => ({
-        name: key,
-        savings: value.savings,
-        loans: value.loans,
-      }));
-    setMonthlyData(monthlyArr);
+    return () => { active = false; };
+  }, [months]);
 
-    // Member status distribution
-    const statusCount: { [key: string]: number } = {};
-    members.forEach((m) => {
-      const status = m.status || 'Active';
-      statusCount[status] = (statusCount[status] || 0) + 1;
-    });
-    setMemberStatusData(
-      Object.entries(statusCount).map(([name, value]) => ({ name, value }))
-    );
-  }, [members, loans, transactions]);
-
-  const handleReportTypeChange = (event: any) => {
-    setReportType(event.target.value);
+  const exportReport = () => {
+    if (!rows) return;
+    const header = ['Month', ...series.map(item => item.label)].join(',');
+    const activity = rows.map(row => [row.month, ...series.map(item => row[item.key])].join(','));
+    saveAs(new Blob([[header, ...activity].join('\n')], { type: 'text/csv;charset=utf-8;' }), 'cooperative-activity.csv');
   };
 
-  const handleTimeRangeChange = (event: any) => {
-    setTimeRange(event.target.value);
-  };
-
-  const handleExport = () => {
-    // Prepare CSV content
-    let csv = 'Monthly Overview (Savings vs Loans)\n';
-    csv += 'Month,Savings,Loans\n';
-    monthlyData.forEach((row) => {
-      csv += `${row.name},${row.savings},${row.loans}\n`;
-    });
-    csv += '\nMember Status Distribution\n';
-    csv += 'Status,Count\n';
-    memberStatusData.forEach((row) => {
-      csv += `${row.name},${row.value}\n`;
-    });
-    // Create blob and trigger download
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'report.csv');
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mt: 4 }}>
-        {error}
-      </Alert>
-    );
-  }
-
+  const chartRows = rows?.map(row => ({
+    month: row.month, deposits: Number(row.deposits), withdrawals: Number(row.withdrawals),
+    disbursements: Number(row.disbursements), repayments: Number(row.repayments)
+  }));
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4">Reports</Typography>
-        <Button variant="contained" onClick={handleExport}>
-          Export Report
-        </Button>
-      </Box>
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Report Type</InputLabel>
-                <Select
-                  value={reportType}
-                  label="Report Type"
-                  onChange={handleReportTypeChange}
-                >
-                  <MenuItem value="monthly">Monthly Overview</MenuItem>
-                  <MenuItem value="quarterly">Quarterly Report</MenuItem>
-                  <MenuItem value="annual">Annual Report</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Time Range</InputLabel>
-                <Select
-                  value={timeRange}
-                  label="Time Range"
-                  onChange={handleTimeRangeChange}
-                >
-                  <MenuItem value="month">This Month</MenuItem>
-                  <MenuItem value="quarter">This Quarter</MenuItem>
-                  <MenuItem value="year">This Year</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Typography variant="h6" gutterBottom>
-              Savings vs Loans
-            </Typography>
-            <BarChart
-              width={500}
-              height={300}
-              data={monthlyData}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
+    <Stack spacing={3}>
+      <Typography component="h1" variant="h4">Financial activity</Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField select label="Reporting period" value={months} onChange={event => setMonths(event.target.value)} size="small">
+          <MenuItem value="3">Last 3 months</MenuItem>
+          <MenuItem value="6">Last 6 months</MenuItem>
+          <MenuItem value="12">Last 12 months</MenuItem>
+        </TextField>
+        <Button variant="outlined" disabled={!rows} onClick={exportReport}>Export CSV</Button>
+      </Stack>
+      {error && <Alert severity="error">{error}</Alert>}
+      {!rows && !error && <Skeleton variant="rounded" height={320} />}
+      {chartRows && <Paper variant="outlined" sx={{ p: { xs: 1, sm: 3 } }}>
+        {chartRows.some(row => series.some(item => row[item.key] !== 0))
+          ? <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={chartRows}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis width={75} />
+              <Tooltip formatter={value => naira.format(Number(value))} />
               <Legend />
-              <Bar dataKey="savings" fill="#8884d8" />
-              <Bar dataKey="loans" fill="#82ca9d" />
+              {series.map(item => <Bar key={item.key} name={item.label} dataKey={item.key} fill={item.color} />)}
             </BarChart>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Member Status Distribution
-            </Typography>
-            <PieChart width={500} height={300}>
-              <Pie
-                data={memberStatusData}
-                cx={250}
-                cy={150}
-                labelLine={false}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-              >
-                {memberStatusData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Growth Trend
-            </Typography>
-            <LineChart
-              width={1000}
-              height={300}
-              data={monthlyData}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="savings"
-                stroke="#8884d8"
-                activeDot={{ r: 8 }}
-              />
-              <Line type="monotone" dataKey="loans" stroke="#82ca9d" />
-            </LineChart>
-          </Paper>
-        </Grid>
-      </Grid>
-    </Box>
+          </ResponsiveContainer>
+          : <Typography sx={{ p: 2 }} color="text.secondary">No completed financial activity in this period.</Typography>}
+      </Paper>}
+    </Stack>
   );
-};
-
-export default Reports; 
+}

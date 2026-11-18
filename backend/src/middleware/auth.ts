@@ -46,7 +46,7 @@ declare global {
 }
 
 export async function canSignIn(user: User) {
-  if (!user.isEmailVerified || !user.cooperativeId) return false;
+  if (!user.isActive || !user.isEmailVerified || !user.cooperativeId) return false;
   if (user.role === 'admin' || user.role === 'staff') return true;
   if (user.role !== 'member') return false;
 

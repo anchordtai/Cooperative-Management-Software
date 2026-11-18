@@ -6,6 +6,8 @@ import Member from './Member';
 class Loan extends Model {
   public id!: string;
   declare cooperativeId: string | null;
+  declare requestedBy: string | null;
+  declare decidedBy: string | null;
   public memberId!: string;
   public amount!: number;
   public purpose!: string;
@@ -31,6 +33,8 @@ Loan.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    requestedBy: { type: DataTypes.UUID },
+    decidedBy: { type: DataTypes.UUID },
     memberId: {
       type: DataTypes.UUID,
       allowNull: false,

@@ -17,7 +17,7 @@ import {
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { transactionService, memberService } from '../services/api';
+import api, { transactionService, memberService } from '../services/api';
 
 interface Transaction {
   id: string;
@@ -38,7 +38,7 @@ interface Member {
 }
 
 const Transactions: React.FC = () => {
-  const { user } = useAuth();
+  const { can } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +49,7 @@ const Transactions: React.FC = () => {
       type: 'deposit',
     amount: '',
     description: '',
+    reference: '',
   });
 
   const columns: GridColDef[] = [
@@ -82,7 +83,27 @@ const Transactions: React.FC = () => {
         </Box>
       ),
     },
+    {
+      field: 'review', headerName: 'Review', width: 200, sortable: false,
+      renderCell: ({ row }) => can('withdrawals.decide') && row.type === 'withdrawal' && row.status === 'pending' && (
+        <Box>
+          <Button size="small" onClick={() => decideWithdrawal(row.id, 'approve')}>Approve</Button>
+          <Button size="small" color="error" onClick={() => decideWithdrawal(row.id, 'reject')}>Reject</Button>
+        </Box>
+      )
+    }
   ];
+
+  const decideWithdrawal = async (id: string, decision: 'approve' | 'reject') => {
+    const reference = decision === 'approve' ? window.prompt('Enter the confirmed payout reference')?.trim() : null;
+    if (decision === 'approve' ? !reference : !window.confirm('Reject this withdrawal request?')) return;
+    try {
+      await api.patch(`/transactions/withdrawals/${id}/${decision}`, { reference });
+      await fetchTransactions();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not review the withdrawal.');
+    }
+  };
 
   const fetchTransactions = async () => {
     try {
@@ -108,7 +129,9 @@ const Transactions: React.FC = () => {
 
   useEffect(() => {
     fetchTransactions();
-    fetchMembers();
+    if (can('savings.deposit')) fetchMembers();
+    // The request closures use the permissions supplied by the initial session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenDialog = () => {
@@ -117,6 +140,7 @@ const Transactions: React.FC = () => {
       type: 'deposit',
       amount: '',
       description: '',
+    reference: '',
     });
     setOpenDialog(true);
   };
@@ -143,7 +167,7 @@ const Transactions: React.FC = () => {
     <Box sx={{ height: 600, width: '100%' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Transactions</Typography>
-        {user?.role === 'admin' && <Button
+        {can('savings.deposit') && <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={handleOpenDialog}
@@ -223,6 +247,10 @@ const Transactions: React.FC = () => {
                 setFormData({ ...formData, description: e.target.value })
               }
             />
+            <TextField fullWidth required margin="dense" label="Transfer or receipt reference"
+              value={formData.reference}
+              inputProps={{ maxLength: 160 }}
+              onChange={event => setFormData({ ...formData, reference: event.target.value })} />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>

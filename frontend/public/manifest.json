@@ -2,14 +2,10 @@
   "short_name": "E-Cooperative",
   "name": "E-Cooperative Management System",
   "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    }
+    { "src": "favicon.png", "sizes": "500x500", "type": "image/png" }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
-} 
+  "theme_color": "#175c4d",
+  "background_color": "#f4f7f4"
+}

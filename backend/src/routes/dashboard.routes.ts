@@ -1,11 +1,12 @@
+import { permit } from '../middleware/permissions';
 import { Router } from 'express';
 import { QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
-import { authenticate, restrictTo } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', authenticate, restrictTo('admin', 'staff'), async (req, res, next) => {
+router.get('/', authenticate, permit('finance.read'), async (req, res, next) => {
   try {
     const cooperativeId = req.user!.cooperativeId;
     const [summary] = await sequelize.query(`

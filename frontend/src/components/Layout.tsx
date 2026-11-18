@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -7,7 +7,7 @@ import {
   Drawer,
   IconButton,
   List,
-  ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Toolbar,
@@ -25,17 +25,22 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
+import HistoryIcon from '@mui/icons-material/History';
+import Brand from './Brand';
+import { AppearanceButton } from './Appearance';
 import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/app' },
-  { text: 'Members', icon: <PeopleIcon />, path: '/app/members' },
-  { text: 'Transactions', icon: <AccountBalanceIcon />, path: '/app/transactions' },
-  { text: 'Loans', icon: <CreditCardIcon />, path: '/app/loans' },
-  { text: 'Reports', icon: <AssessmentIcon />, path: '/app/reports' },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/app/settings' },
+  { text: 'Members', icon: <PeopleIcon />, path: '/app/members', permission: 'members.read' },
+  { text: 'Transactions', icon: <AccountBalanceIcon />, path: '/app/transactions', permission: 'finance.read' },
+  { text: 'Loans', icon: <CreditCardIcon />, path: '/app/loans', permission: 'finance.read' },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/app/reports', permission: 'reports.read' },
+  { text: 'Audit history', icon: <HistoryIcon />, path: '/app/audit', permission: 'audit.read' },
+  { text: 'Staff access', icon: <PeopleIcon />, path: '/app/staff', adminOnly: true },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/app/settings', adminOnly: true },
 ];
 
 const Layout: React.FC = () => {
@@ -43,7 +48,7 @@ const Layout: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, can } = useAuth();
   const [logoutFailed, setLogoutFailed] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -62,23 +67,22 @@ const Layout: React.FC = () => {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          E-Cooperative
-        </Typography>
+        <Brand to="/app" />
       </Toolbar>
       <List>
-        {menuItems.filter(item => item.text !== 'Settings' || user?.role === 'admin').map((item) => (
-          <ListItem key={item.text} button onClick={() => { navigate(item.path); setMobileOpen(false); }}>
+        {menuItems.filter(item => (!item.adminOnly || user?.role === 'admin') && (!item.permission || can(item.permission))).map((item) => (
+          <ListItemButton key={item.text} component={NavLink} to={item.path} end onClick={() => setMobileOpen(false)}
+            sx={{ mx: 1, mb: 0.5, borderRadius: 2, '&.active': { bgcolor: 'action.selected', color: 'primary.main' } }}>
             <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.text} />
-          </ListItem>
+          </ListItemButton>
         ))}
-        <ListItem button onClick={handleLogout}>
+        <ListItemButton onClick={handleLogout} sx={{ mx: 1, borderRadius: 2 }}>
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
           <ListItemText primary={logoutFailed ? "Sign out failed. Retry" : "Sign out"} />
-        </ListItem>
+        </ListItemButton>
       </List>
     </div>
   );
@@ -88,7 +92,10 @@ const Layout: React.FC = () => {
       <CssBaseline />
       <AppBar
         position="fixed"
+        elevation={0}
+        color="inherit"
         sx={{
+          bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider',
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
         }}
@@ -103,9 +110,8 @@ const Layout: React.FC = () => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
-            Cooperative Management System
-          </Typography>
+          <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Cooperative workspace</Typography>
+          <AppearanceButton />
         </Toolbar>
       </AppBar>
       <Box

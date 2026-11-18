@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Container, Typography, TextField, Button, Box, Alert, Paper } from '@mui/material';
 
+import api from '../services/api';
+import Brand from '../components/Brand';
+
 const Contact: React.FC = () => {
   const [form, setForm] = useState({ name: '', email: '', message: '' });
   const [error, setError] = useState<string | null>(null);
@@ -28,13 +31,11 @@ const Contact: React.FC = () => {
     }
     setLoading(true);
     try {
-      // TODO: Integrate with backend API
-      // await api.post('/contact', form);
-      console.log('Contact form submitted:', form);
-      setSuccess('Your message has been sent! We will get back to you soon.');
+      const result = await api.post('/contact', form);
+      setSuccess(result.data.message);
       setForm({ name: '', email: '', message: '' });
-    } catch (err) {
-      setError('Failed to send message. Please try again later.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to send the message. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -42,7 +43,8 @@ const Contact: React.FC = () => {
 
   return (
     <Container maxWidth="sm" sx={{ py: 8 }}>
-      <Paper elevation={3} sx={{ p: 4 }}>
+      <Box sx={{ mb: 3 }}><Brand /></Box>
+      <Paper variant="outlined" sx={{ p: 4 }}>
         <Typography variant="h4" align="center" gutterBottom fontWeight={700} color="primary">
           Contact Us
         </Typography>

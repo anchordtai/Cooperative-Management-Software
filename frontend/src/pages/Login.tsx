@@ -11,6 +11,7 @@ import {
   Paper,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import Brand from '../components/Brand';
 import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Visibility from '@mui/icons-material/Visibility';
@@ -103,6 +104,7 @@ const Login: React.FC = () => {
     <Container component="main" maxWidth="xs">
       <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Paper elevation={3} sx={{ padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <Box sx={{ mb: 2 }}><Brand /></Box>
           <Typography component="h1" variant="h5">
             Sign in
           </Typography>

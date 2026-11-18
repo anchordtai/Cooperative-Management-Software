@@ -10,7 +10,7 @@ const fields = [
 ] as const;
 
 export default function Settings() {
-  const [settings, setSettings] = useState<Record<string, string> | null>(null);
+  const [settings, setSettings] = useState<Record<string, string | null> | null>(null);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -22,7 +22,7 @@ export default function Settings() {
     event.preventDefault();
     setSaving(true);
     try {
-      const response = await settingsService.update(settings);
+      const response = await settingsService.update({ ...settings, loanRate: settings?.loanRate || null });
       setSettings(response.data);
       setNotice({ text: 'Settings saved.', error: false });
     } catch (error: any) {
@@ -39,10 +39,14 @@ export default function Settings() {
       {settings && <Paper sx={{ p: 3 }}>
         <Stack component="form" spacing={2} onSubmit={save}>
           {fields.map(field => <TextField key={field.name} label={field.label}
-            type={'type' in field ? field.type : 'text'} value={settings[field.name]}
+            type={'type' in field ? field.type : 'text'} value={settings[field.name] || ''}
             required={field.name === 'cooperativeName'}
             onChange={event => setSettings({ ...settings, [field.name]: event.target.value })} />)}
-          <TextField label="Currency" value={settings.currency} InputProps={{ readOnly: true }} />
+          <TextField label="Currency" value={settings.currency || 'NGN'} InputProps={{ readOnly: true }} />
+          <TextField label="Annual flat loan interest (%)" type="number" value={settings.loanRate ?? ''}
+            helperText="Leave blank to pause new loan applications. Rate changes apply to new applications."
+            inputProps={{ min: 0, max: 100, step: '0.01' }}
+            onChange={event => setSettings({ ...settings, loanRate: event.target.value })} />
           <Button type="submit" variant="contained" disabled={saving}>Save settings</Button>
         </Stack>
       </Paper>}

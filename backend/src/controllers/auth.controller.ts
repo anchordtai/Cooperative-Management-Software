@@ -16,7 +16,7 @@ const normalizedEmail = (value: unknown) => typeof value === 'string' ? value.tr
 
 const serialize = (user: User) => ({
   id: user.id, email: user.email, role: user.role, cooperativeId: user.cooperativeId,
-  firstName: user.firstName, lastName: user.lastName, phone: user.phone
+  firstName: user.firstName, lastName: user.lastName, phone: user.phone, permissions: user.permissions
 });
 
 const strongPassword = (value: unknown): value is string => (

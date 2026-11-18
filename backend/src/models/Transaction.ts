@@ -6,6 +6,9 @@ import Member from './Member';
 class Transaction extends Model {
   public id!: string;
   declare cooperativeId: string | null;
+  declare requestedBy: string | null;
+  declare handledBy: string | null;
+  declare loanId: string | null;
   public memberId!: string;
   public type!: 'deposit' | 'withdrawal' | 'loan' | 'repayment';
   public amount!: number;
@@ -27,6 +30,10 @@ Transaction.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    requestedBy: { type: DataTypes.UUID },
+    handledBy: { type: DataTypes.UUID },
+    loanId: { type: DataTypes.UUID },
+    externalReference: { type: DataTypes.STRING(160) },
     memberId: {
       type: DataTypes.UUID,
       allowNull: false,

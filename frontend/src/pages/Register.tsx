@@ -12,6 +12,10 @@ import {
   Grid,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import Brand from '../components/Brand';
+
+const termsUrl = process.env.REACT_APP_TERMS_URL;
+const privacyUrl = process.env.REACT_APP_PRIVACY_URL;
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -97,7 +101,7 @@ const Register: React.FC = () => {
       valid = false;
     }
     // Terms of Service
-    if (!tosChecked) {
+    if (termsUrl && privacyUrl && !tosChecked) {
       setTosError('You must agree to the Terms of Service.');
       valid = false;
     }
@@ -142,6 +146,7 @@ const Register: React.FC = () => {
             width: '100%',
           }}
         >
+          <Box sx={{ mb: 2 }}><Brand /></Box>
           <Typography component="h1" variant="h5">
             Sign up
           </Typography>
@@ -254,6 +259,7 @@ const Register: React.FC = () => {
                   inputProps={{ 'aria-label': 'Confirm Password' }}
                 />
               </Grid>
+              {termsUrl && privacyUrl && (
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <input
@@ -266,11 +272,12 @@ const Register: React.FC = () => {
                     style={{ marginRight: 8 }}
                   />
                   <Typography variant="body2" component="label" htmlFor="tos">
-                    I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                    I agree to the <a href={termsUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href={privacyUrl} target="_blank" rel="noopener noreferrer">Privacy Policy</a>
                   </Typography>
                 </Box>
                 {tosError && <Typography color="error" variant="caption">{tosError}</Typography>}
               </Grid>
+              )}
             </Grid>
             <Button
               type="submit"

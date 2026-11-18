@@ -6,6 +6,7 @@ interface User {
   email: string;
   name?: string;
   role: string;
+  permissions: string[];
   firstName?: string;
   lastName?: string;
   phone?: string;
@@ -21,6 +22,7 @@ interface AuthContextType {
   require2FA: boolean;
   verify2FA: (email: string, code: string) => Promise<void>;
   pending2FAEmail: string;
+  can: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,8 +115,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const can = (permission: string) => Boolean(user && (user.role === 'admin' || user.permissions?.includes(permission)));
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout, require2FA, verify2FA, pending2FAEmail }}>
+    <AuthContext.Provider value={{ user, loading, error, login, register, logout, require2FA, verify2FA, pending2FAEmail, can }}>
       {children}
     </AuthContext.Provider>
   );

@@ -12,6 +12,10 @@ import financialRoutes from './routes/financial.routes';
 import transactionsRoutes from './routes/transactions.routes';
 import settingsRoutes from './routes/settings.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import reportsRoutes from './routes/reports.routes';
+import staffRoutes from './routes/staff.routes';
+import contactRoutes from './routes/contact.routes';
+import auditRoutes from './routes/audit.routes';
 
 jwtSecret();
 const app = express();
@@ -37,6 +41,10 @@ app.use('/api/financial', financialRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/audit', auditRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

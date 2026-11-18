@@ -1,50 +1,28 @@
 import React from 'react';
-import { Container, Typography, Accordion, AccordionSummary, AccordionDetails, Box } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Container, Stack, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import Brand from '../components/Brand';
 
 const faqs = [
-  {
-    q: 'How do I onboard my cooperative members?',
-    a: 'E-Cooperative lets you import members in bulk or add them individually. Members receive an invite to set up their profile and can start saving or requesting loans immediately.'
-  },
-  {
-    q: 'Can I automate member contributions and loan repayments?',
-    a: 'Yes! Our platform supports automated reminders, payment tracking, and reconciliation for both savings and loans.'
-  },
-  {
-    q: 'Is my cooperative\'s data secure?',
-    a: 'Absolutely. We use bank-level encryption, regular security audits, and role-based access to keep your data safe.'
-  },
-  {
-    q: 'Can I generate reports for my cooperative?',
-    a: 'Yes, you can generate, export, and share detailed financial and member activity reports with a single click.'
-  },
-  {
-    q: 'What support do you offer?',
-    a: 'We offer email, chat, and phone support depending on your plan. Our help center and community forum are available to all users.'
-  },
+  ['How do I add members?', 'Register the cooperative and verify your email. Add a member in the workspace, set the membership to Active and send a sign-in invitation.'],
+  ['How do members apply for a loan?', 'An administrator sets the annual flat interest rate. Members can review the rate and submit a request from their own account. An authorised officer reviews the application.'],
+  ['How are transfers recorded?', 'Staff with the appropriate permissions can record deposits, withdrawals, disbursements and repayments after confirming the transfer separately.'],
+  ['Can I export an activity report?', 'Yes. Open Reports, select a 3-, 6- or 12-month period and export completed financial activity as CSV.']
 ];
 
-const FAQ: React.FC = () => {
+export default function FAQ() {
   return (
-    <Container maxWidth="md" sx={{ py: 8 }}>
-      <Typography variant="h3" align="center" gutterBottom fontWeight={700} color="primary">
-        Frequently Asked Questions
-      </Typography>
-      <Box mt={4}>
-        {faqs.map((faq, idx) => (
-          <Accordion key={idx} sx={{ mb: 2, borderRadius: 2, boxShadow: 2 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="h6">{faq.q}</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Typography>{faq.a}</Typography>
-            </AccordionDetails>
+    <Container component="main" maxWidth="md" sx={{ py: 5 }}>
+      <Stack spacing={3}>
+        <Brand />
+        <Typography component="h1" variant="h4">Frequently asked questions</Typography>
+        <div>{faqs.map(([question, answer]) => (
+          <Accordion key={question} disableGutters>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography fontWeight={650}>{question}</Typography></AccordionSummary>
+            <AccordionDetails><Typography color="text.secondary">{answer}</Typography></AccordionDetails>
           </Accordion>
-        ))}
-      </Box>
+        ))}</div>
+      </Stack>
     </Container>
   );
-};
-
-export default FAQ; 
+}

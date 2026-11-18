@@ -17,6 +17,7 @@ import {
   FormControl,
   InputLabel,
   Alert,
+  Stack,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -25,11 +26,12 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useAuth } from '../contexts/AuthContext';
-import { loanService, memberService } from '../services/api';
+import api, { loanService, memberService } from '../services/api';
 
 interface Loan {
   id: string;
   purpose: string;
+  requestedBy?: string;
   memberId: string;
   memberName?: string;
   amount: number;
@@ -41,6 +43,15 @@ interface Loan {
   remainingBalance?: number;
 }
 
+interface Installment {
+  number: number;
+  dueOn: string;
+  principal: string;
+  interest: string;
+  principalPaid: string;
+  interestPaid: string;
+}
+
 interface Member {
   id: string;
   firstName: string;
@@ -48,7 +59,10 @@ interface Member {
 }
 
 const Loans: React.FC = () => {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const [loanRate, setLoanRate] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<Installment[]>([]);
+  const [payment, setPayment] = useState({ amount: '', reference: '' });
   const [selected, setSelected] = useState<Loan | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState('');
@@ -89,7 +103,10 @@ const Loans: React.FC = () => {
 
   useEffect(() => {
     fetchLoans();
-    fetchMembers();
+    if (can('loans.submit')) fetchMembers();
+    api.get('/financial/loans/policy').then(result => setLoanRate(result.data.data.loanRate))
+      .catch(() => setError('Could not load the current loan rate.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -148,6 +165,8 @@ const Loans: React.FC = () => {
     try {
       const result = await loanService.getById(id);
       setSelected(result.data);
+      setSchedule(result.schedule);
+      setPayment({ amount: '', reference: '' });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Could not load the loan details.');
     }
@@ -168,6 +187,23 @@ const Loans: React.FC = () => {
     }
   };
 
+  const postPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    setDeciding(true);
+    setDecisionError('');
+    try {
+      const endpoint = selected.status === 'approved' ? 'disburse' : 'repayments';
+      await api.post(`/financial/loans/${selected.id}/${endpoint}`, payment);
+      await handleViewLoan(selected.id);
+      await fetchLoans();
+    } catch (err: any) {
+      setDecisionError(err.response?.data?.message || 'Could not record the transfer.');
+    } finally {
+      setDeciding(false);
+    }
+  };
+
   const handleOpenDialog = () => {
     setFormData({ memberId: '', amount: '', purpose: '', term: '' });
     setOpenDialog(true);
@@ -182,6 +218,7 @@ const Loans: React.FC = () => {
     try {
       await loanService.create({
         ...formData,
+        agreedRate: loanRate,
         amount: formData.amount,
         term: parseInt(formData.term),
       });
@@ -209,9 +246,9 @@ const Loans: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4">Loans</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenDialog}>
+        {can('loans.submit') && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={loanRate === null}>
           New Loan
-        </Button>
+        </Button>}
       </Box>
 
       {error && (
@@ -265,10 +302,32 @@ const Loans: React.FC = () => {
           <Typography>Amount · ₦{selected.amount}</Typography>
           <Typography>Term · {selected.term} months</Typography>
           <Typography>Status · {selected.status}</Typography>
+          {schedule.length > 0 && <Stack spacing={0.5} sx={{ my: 2 }}>
+            <Typography variant="subtitle2">Outstanding · ₦{selected.remainingBalance}</Typography>
+            {schedule.map(row => {
+              const due = Number(row.principal) + Number(row.interest);
+              const paid = Number(row.principalPaid) + Number(row.interestPaid);
+              return <Typography key={row.number} variant="body2">
+                {row.dueOn} · ₦{due.toFixed(2)} due · ₦{paid.toFixed(2)} paid
+              </Typography>;
+            })}
+          </Stack>}
+          {can('loans.post') && ['approved', 'active'].includes(selected.status) &&
+            <Stack component="form" spacing={2} onSubmit={postPayment} sx={{ mt: 3 }}>
+              <TextField label="Recorded bank reference" value={payment.reference} required
+                onChange={event => setPayment({ ...payment, reference: event.target.value })} />
+              {selected.status === 'active' && <TextField label="Repayment amount" type="number" required
+                inputProps={{ min: '0.01', max: selected.remainingBalance, step: '0.01' }}
+                value={payment.amount} onChange={event => setPayment({ ...payment, amount: event.target.value })} />}
+              <Button type="submit" disabled={deciding} variant="contained">
+                {selected.status === 'approved' ? 'Record disbursement' : 'Record repayment'}
+              </Button>
+            </Stack>}
+
         </DialogContent>}
         <DialogActions>
           <Button disabled={deciding} onClick={() => setSelected(null)}>Close</Button>
-          {user?.role === 'admin' && selected?.status === 'pending' && <>
+          {can('loans.decide') && selected?.status === 'pending' && selected.requestedBy !== user?.id && <>
             <Button disabled={deciding} color="error" onClick={() => decide('reject')}>Reject</Button>
             <Button disabled={deciding} variant="contained" onClick={() => decide('approve')}>Approve</Button>
           </>}
@@ -279,6 +338,7 @@ const Loans: React.FC = () => {
         <DialogTitle>New Loan</DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
+            <Typography color="text.secondary">Annual flat interest rate · {loanRate}%</Typography>
             <FormControl fullWidth margin="dense">
               <InputLabel>Member</InputLabel>
               <Select

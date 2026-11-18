@@ -112,24 +112,116 @@ test('onboarding, rotating sessions, member approval, and cooperative isolation'
   await memberClient.request('/auth/login', 'POST', { email, password });
   await memberClient.request('/members', 'GET', undefined, 403);
 
-  const deposit = { memberId: member.id, type: 'deposit', amount: '1200.05', description: 'Savings contribution' };
+  const staffClient = client(base);
+  const staffEmail = 'officer' + suffix + '@example.test';
+  const staff = (await adminA.request('/staff', 'POST', {
+    email: staffEmail, firstName: 'Loan', lastName: 'Officer', phone: '08012345678',
+    permissions: ['members.read', 'finance.read', 'loans.submit']
+  }, 201)).data;
+  assert.equal(staff.delivered, false);
+  assert.equal((await adminB.request('/staff')).data.length, 0);
+  await adminB.request('/staff/' + staff.id, 'PUT', { permissions: [], isActive: true }, 404);
+  const staffInvite = randomBytes(32).toString('hex');
+  await User.update({
+    emailVerificationToken: createHash('sha256').update(staffInvite).digest('hex'),
+    emailVerificationExpires: new Date(Date.now() + 60000)
+  }, { where: { email: staffEmail } });
+  await staffClient.request('/auth/accept-invitation', 'POST', { token: staffInvite, password });
+  await staffClient.request('/auth/login', 'POST', { email: staffEmail, password });
+  assert.equal((await staffClient.request('/members')).results, 1);
+  await staffClient.request('/staff', 'GET', undefined, 403);
+  await staffClient.request('/reports/activity', 'GET', undefined, 403);
+
+  const deposit = { memberId: member.id, type: 'deposit', amount: '1200.05', description: 'Savings contribution', reference: 'DEP-001' };
   await adminB.request('/transactions', 'POST', deposit, 404);
   await memberClient.request('/transactions', 'POST', deposit, 403);
   const receipt = (await adminA.request('/transactions', 'POST', deposit, 201)).data;
+  await adminA.request('/transactions', 'POST', deposit, 409);
   await adminB.request('/transactions/' + receipt.id, 'GET', undefined, 404);
   assert.equal((await memberClient.request('/transactions/my')).results, 1);
   assert.equal((await memberClient.request('/members/my')).data.savings, '1200.05');
   assert.equal((await adminA.request('/dashboard')).data.totalSavings, '1200.05');
   assert.equal((await adminB.request('/dashboard')).data.totalSavings, '0');
 
+  const withdrawal = (await memberClient.request('/transactions/withdrawals', 'POST', { amount: '100.05' }, 201)).data;
+  assert.equal(withdrawal.status, 'pending');
+  await memberClient.request('/transactions/withdrawals', 'POST', { amount: '1100.01' }, 409);
+  assert.equal((await memberClient.request('/members/my')).data.savings, '1200.05');
+  await adminB.request('/transactions/withdrawals/' + withdrawal.id + '/approve', 'PATCH', undefined, 404);
+  await adminA.request('/transactions/withdrawals/' + withdrawal.id + '/approve', 'PATCH', { reference: 'WD-001' });
+  await adminA.request('/transactions/withdrawals/' + withdrawal.id + '/approve', 'PATCH', undefined, 409);
+  assert.equal((await memberClient.request('/members/my')).data.savings, '1100.00');
+
+  await adminA.request('/settings', 'PUT', {
+    cooperativeName: 'Alpha', email: '', phone: '', address: '', loanRate: '12'
+  });
+  assert.equal((await memberClient.request('/financial/loans/policy')).data.loanRate, '12');
   const loan = (await memberClient.request('/financial/loans', 'POST', {
-    amount: '300', term: '3', purpose: 'Purchase equipment'
+    amount: '300', term: '3', purpose: 'Purchase equipment', agreedRate: '12'
   }, 201)).data;
   await memberClient.request('/financial/loans/' + loan.id + '/approve', 'PATCH', undefined, 403);
   await adminB.request('/financial/loans/' + loan.id, 'GET', undefined, 404);
   const approved = (await adminA.request('/financial/loans/' + loan.id + '/approve', 'PATCH')).data;
   assert.equal(approved.status, 'approved');
   await adminA.request('/financial/loans/' + loan.id + '/approve', 'PATCH', undefined, 409);
+
+  await adminA.request('/staff/' + staff.id, 'PUT', {
+    isActive: true, permissions: ['members.read', 'finance.read', 'loans.submit', 'loans.decide']
+  });
+  const staffLoan = (await staffClient.request('/financial/loans', 'POST', {
+    memberId: member.id, amount: '200', term: 3, purpose: 'Tools', agreedRate: '12'
+  }, 201)).data;
+  await staffClient.request('/financial/loans/' + staffLoan.id + '/approve', 'PATCH', undefined, 409);
+  await adminA.request('/financial/loans/' + staffLoan.id + '/reject', 'PATCH');
+  await adminA.request('/staff/' + staff.id, 'PUT', { isActive: false, permissions: [] });
+  await staffClient.request('/auth/me', 'GET', undefined, 401);
+
+  const active = (await adminA.request('/financial/loans/' + loan.id + '/disburse', 'POST', { reference: 'DF-001' })).data;
+  assert.equal(active.status, 'active');
+  assert.equal(active.remainingBalance, '309.00');
+  await adminA.request('/financial/loans/' + loan.id + '/disburse', 'POST', { reference: 'DF-001' }, 409);
+  const partial = (await adminA.request('/financial/loans/' + loan.id + '/repayments', 'POST', {
+    amount: '105', reference: 'RP-001'
+  }, 201)).data.loan;
+  assert.equal(partial.remainingBalance, '204.00');
+  await adminA.request('/financial/loans/' + loan.id + '/repayments', 'POST', {
+    amount: '105', reference: 'RP-001'
+  }, 409);
+  await adminA.request('/financial/loans/' + loan.id + '/repayments', 'POST', {
+    amount: '205', reference: 'RP-002'
+  }, 400);
+  const settled = (await adminA.request('/financial/loans/' + loan.id + '/repayments', 'POST', {
+    amount: '204', reference: 'RP-002'
+  }, 201)).data.loan;
+  assert.equal(settled.status, 'completed');
+  assert.equal(settled.remainingBalance, '0.00');
+  const detail = await memberClient.request('/financial/loans/' + loan.id);
+  assert.equal(detail.schedule.length, 3);
+  assert(detail.schedule.every(row => row.principal === row.principalPaid && row.interest === row.interestPaid));
+  const [postings] = await sequelize.query(`
+    SELECT "debitAccount", "creditAccount", "amount" FROM "FinancialPostings"
+    WHERE "cooperativeId" = :cooperativeId
+  `, { replacements: { cooperativeId: userA.cooperativeId } });
+  assert.equal(postings.length, 7);
+  assert.equal(postings.filter(row => row.creditAccount === 'interest_income').reduce((sum, row) => sum + Number(row.amount), 0), 9);
+  await assert.rejects(sequelize.query(`DELETE FROM "FinancialPostings" WHERE "cooperativeId" = :cooperativeId`,
+    { replacements: { cooperativeId: userA.cooperativeId } }), /immutable/);
+
+  const audit = (await adminA.request('/audit')).data;
+  assert(audit.some(entry => entry.action === 'loan.disbursed'));
+  assert(audit.some(entry => entry.action === 'staff.permissions_updated'));
+  assert.equal((await adminB.request('/audit')).data.length, 0);
+  await memberClient.request('/audit', 'GET', undefined, 403);
+
+  const report = (await adminA.request('/reports/activity?months=3')).data;
+  assert.equal(report.length, 3);
+  assert.equal(report[2].deposits, '1200.05');
+  assert.equal(report[2].withdrawals, '100.05');
+  assert.equal(report[2].disbursements, '300.00');
+  assert.equal(report[2].repayments, '309.00');
+  const otherReport = (await adminB.request('/reports/activity?months=3')).data;
+  assert.equal(otherReport[2].deposits, '0');
+  await memberClient.request('/reports/activity', 'GET', undefined, 403);
 
   await adminA.request('/members/' + member.id, 'PUT', { status: 'suspended' });
   await memberClient.request('/auth/me', 'GET', undefined, 401);

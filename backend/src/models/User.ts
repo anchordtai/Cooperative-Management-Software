@@ -10,6 +10,8 @@ class User extends Model {
   public email!: string;
   public password!: string;
   public role!: string;
+  declare isActive: boolean;
+  declare permissions: string[];
   public firstName!: string;
   public lastName!: string;
   public isEmailVerified!: boolean;
@@ -63,6 +65,8 @@ User.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    permissions: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
     role: {
       type: DataTypes.ENUM('admin', 'member', 'staff'),
       defaultValue: 'member',

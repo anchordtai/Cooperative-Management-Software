@@ -1,75 +1,35 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, PaletteMode } from '@mui/material';
 
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
-    },
-    secondary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
-    },
-    background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: [
-      '-apple-system',
-      'BlinkMacSystemFont',
-      '"Segoe UI"',
-      'Roboto',
-      '"Helvetica Neue"',
-      'Arial',
-      'sans-serif',
-    ].join(','),
-    h1: {
-      fontSize: '2.5rem',
-      fontWeight: 500,
-    },
-    h2: {
-      fontSize: '2rem',
-      fontWeight: 500,
-    },
-    h3: {
-      fontSize: '1.75rem',
-      fontWeight: 500,
-    },
-    h4: {
-      fontSize: '1.5rem',
-      fontWeight: 500,
-    },
-    h5: {
-      fontSize: '1.25rem',
-      fontWeight: 500,
-    },
-    h6: {
-      fontSize: '1rem',
-      fontWeight: 500,
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: 8,
-        },
+export default function buildTheme(mode: PaletteMode) {
+  const dark = mode === 'dark';
+  return createTheme({
+    palette: {
+      mode,
+      primary: { main: dark ? '#80d9be' : '#166353' },
+      secondary: { main: dark ? '#eac88c' : '#8e5e24' },
+      background: {
+        default: dark ? '#111c1a' : '#f4f7f4',
+        paper: dark ? '#172522' : '#ffffff'
       },
+      text: {
+        primary: dark ? '#edf7f3' : '#162a25',
+        secondary: dark ? '#bbccc5' : '#536762'
+      }
     },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        },
+    shape: { borderRadius: 12 },
+    typography: {
+      fontFamily: 'Inter, "Segoe UI", system-ui, sans-serif',
+      h4: { fontWeight: 750, fontSize: '1.9rem', letterSpacing: '-0.035em' },
+      h5: { fontWeight: 720, letterSpacing: '-0.025em' },
+      h6: { fontWeight: 700 }
+    },
+    components: {
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: { root: { textTransform: 'none', fontWeight: 700 } }
       },
-    },
-  },
-});
-
-export default theme; 
+      MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
+      MuiCard: { styleOverrides: { root: { borderRadius: 16 } } }
+    }
+  });
+}

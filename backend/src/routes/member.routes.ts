@@ -1,3 +1,4 @@
+import { permit } from '../middleware/permissions';
 import { Router } from 'express';
 import { authenticate, restrictTo } from '../middleware/auth';
 import {
@@ -7,8 +8,8 @@ import {
 const router = Router();
 router.use(authenticate);
 router.get('/my', getOwnMember);
-router.get('/', restrictTo('admin', 'staff'), getAllMembers);
-router.get('/:id', restrictTo('admin', 'staff'), getMemberById);
+router.get('/', permit('members.read'), getAllMembers);
+router.get('/:id', permit('members.read'), getMemberById);
 router.post('/', restrictTo('admin'), createMember);
 router.put('/:id', restrictTo('admin'), updateMember);
 router.delete('/:id', restrictTo('admin'), deleteMember);

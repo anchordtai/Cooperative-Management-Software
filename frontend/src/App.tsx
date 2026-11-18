@@ -1,7 +1,6 @@
 import React from 'react';
+import { Typography } from '@mui/material';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -12,8 +11,9 @@ import Transactions from './pages/Transactions';
 import Loans from './pages/Loans';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Staff from './pages/Staff';
+import Audit from './pages/Audit';
 import LoadingSpinner from './components/LoadingSpinner';
-import theme from './theme';
 import UserDashboard from './pages/UserDashboard';
 import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
@@ -22,21 +22,20 @@ import VerifyAccount from './pages/VerifyAccount';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 
-const ProtectedRoute = ({ children, roles }: { children: React.ReactNode; roles?: string[] }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode; roles?: string[]; permission?: string }) => {
+  const { user, loading, can } = useAuth();
   if (loading) return <LoadingSpinner message="Checking authentication…" />;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  if (permission && !can(permission)) return <Navigate to="/app" replace />;
   return <>{children}</>;
 };
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Routes>
+    <Routes>
         <Route path="/" element={user ? <Navigate replace to={user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/register" element={<Register />} />
@@ -48,15 +47,16 @@ export default function App() {
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/app" element={<ProtectedRoute roles={['admin', 'staff']}><Layout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="members" element={<Members />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="loans" element={<Loans />} />
-          <Route path="reports" element={<Reports />} />
+          <Route index element={can('finance.read') ? <Dashboard /> : <Typography component="h1" variant="h4">Cooperative workspace</Typography>} />
+          <Route path="members" element={<ProtectedRoute permission="members.read"><Members /></ProtectedRoute>} />
+          <Route path="transactions" element={<ProtectedRoute permission="finance.read"><Transactions /></ProtectedRoute>} />
+          <Route path="loans" element={<ProtectedRoute permission="finance.read"><Loans /></ProtectedRoute>} />
+          <Route path="reports" element={<ProtectedRoute permission="reports.read"><Reports /></ProtectedRoute>} />
+          <Route path="audit" element={<ProtectedRoute permission="audit.read"><Audit /></ProtectedRoute>} />
+          <Route path="staff" element={<ProtectedRoute roles={['admin']}><Staff /></ProtectedRoute>} />
           <Route path="settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </ThemeProvider>
+    </Routes>
   );
 }
