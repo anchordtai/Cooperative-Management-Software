@@ -1,26 +1,27 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Typography } from '@mui/material';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Members from './pages/Members';
-import Transactions from './pages/Transactions';
-import Loans from './pages/Loans';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
-import Staff from './pages/Staff';
-import Audit from './pages/Audit';
 import LoadingSpinner from './components/LoadingSpinner';
-import UserDashboard from './pages/UserDashboard';
 import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyAccount from './pages/VerifyAccount';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Members = lazy(() => import('./pages/Members'));
+const Transactions = lazy(() => import('./pages/Transactions'));
+const Loans = lazy(() => import('./pages/Loans'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Staff = lazy(() => import('./pages/Staff'));
+const Audit = lazy(() => import('./pages/Audit'));
+const UserDashboard = lazy(() => import('./pages/UserDashboard'));
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode; roles?: string[]; permission?: string }) => {
   const { user, loading, can } = useAuth();
@@ -35,7 +36,8 @@ export default function App() {
   const { user, can } = useAuth();
 
   return (
-    <Routes>
+    <Suspense fallback={<LoadingSpinner message="Loading page…" />}>
+      <Routes>
         <Route path="/" element={user ? <Navigate replace to={user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/register" element={<Register />} />
@@ -57,6 +59,7 @@ export default function App() {
           <Route path="settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

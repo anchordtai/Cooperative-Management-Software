@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Use the environment variable for the API base URL or fallback to localhost
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+  import.meta.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Enable credentials globally for axios
 axios.defaults.withCredentials = true;

@@ -5,9 +5,7 @@
   command = "npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
-  NPM_VERSION = "9"
-  CI = "false"
+  NODE_VERSION = "22"
 
 # Redirect all routes to index.html for React Router
 [[redirects]]

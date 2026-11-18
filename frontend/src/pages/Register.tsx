@@ -14,8 +14,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import Brand from '../components/Brand';
 
-const termsUrl = process.env.REACT_APP_TERMS_URL;
-const privacyUrl = process.env.REACT_APP_PRIVACY_URL;
+const termsUrl = import.meta.env.REACT_APP_TERMS_URL;
+const privacyUrl = import.meta.env.REACT_APP_PRIVACY_URL;
 
 const Register: React.FC = () => {
   const navigate = useNavigate();

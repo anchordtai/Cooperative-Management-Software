@@ -1,6 +1,6 @@
 # E-Cooperative
 
-E-Cooperative is a React, TypeScript and Material UI application backed by Express, Sequelize and PostgreSQL.
+E-Cooperative is a React, TypeScript, Material UI and Vite application backed by Express, Sequelize and PostgreSQL.
 
 ## Development status
 
@@ -10,7 +10,7 @@ The project is in development. Configurable financial products, general-ledger m
 
 ## Run locally
 
-Use Node.js 22 or later and PostgreSQL. Create an empty PostgreSQL database and configure a database user with access.
+Use Node.js 22.12 or later and PostgreSQL. Create an empty PostgreSQL database and configure a database user with access.
 
 1. Copy `backend/.env.example` to `backend/.env` and set the PostgreSQL connection, a unique `JWT_SECRET` of at least 32 bytes, and the frontend URL. Use `openssl rand -hex 32` to generate a secret.
 2. Configure authenticated SMTP for verification, invitations and password recovery. Set `SUPPORT_EMAIL` to accept website enquiries. Port 465 uses implicit TLS. Other ports require STARTTLS.
@@ -41,7 +41,7 @@ Pre-existing records have no reliable cooperative assignment. They are preserved
 
 ## Build and verification
 
-- Frontend and backend each use `npm run build`.
+- Frontend and backend each use `npm run build`. Run `npm test` in `frontend` for frontend tests.
 - For backend integration tests, provision a disposable PostgreSQL database, configure its connection, run the migrations and then run `ECOOPERATIVE_TEST_DATABASE=1 npm test` from `backend`. The tests create sample organisations and members in that database. They use port 55433 by default. Override with `TEST_PORT`.
 - `GET /health` checks backend connectivity to PostgreSQL.
 
