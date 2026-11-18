@@ -17,6 +17,7 @@ import staffRoutes from './routes/staff.routes';
 import contactRoutes from './routes/contact.routes';
 import auditRoutes from './routes/audit.routes';
 import paymentsRoutes, { paystackWebhook } from './routes/payments.routes';
+import documentsRoutes from './routes/documents.routes';
 
 jwtSecret();
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/documents', documentsRoutes);
 
 app.get('/health', async (_req, res) => {
   try {

@@ -1,4 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
+import { saveAs } from 'file-saver';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@mui/material';
 import { AppearanceButton } from '../components/Appearance';
@@ -122,6 +123,15 @@ export default function UserDashboard() {
     }
   };
 
+  const download = async (path: string, filename: string) => {
+    try {
+      const { data } = await api.get('/documents/' + path, { responseType: 'blob' });
+      saveAs(data, filename);
+    } catch {
+      setNotice({ error: true, text: 'Could not download the requested document.' });
+    }
+  };
+
   return (
     <Stack spacing={3} sx={{ maxWidth: 1120, mx: 'auto', p: { xs: 2, sm: 4 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -138,6 +148,9 @@ export default function UserDashboard() {
             <Card variant="outlined"><CardContent>
               <Typography color="text.secondary">Savings balance</Typography>
               <Typography variant="h5">{naira.format(Number(profile.savings))}</Typography>
+              <Button size="small" sx={{ mt: 1 }} onClick={() => download('my-savings-statement', 'savings-statement.pdf')}>
+                Download savings statement
+              </Button>
               <Stack component="form" spacing={2} onSubmit={requestWithdrawal} sx={{ mt: 2 }}>
                 <TextField label="Withdrawal amount (NGN)" type="number" required
                   inputProps={{ min: '0.01', max: Number(profile.savings), step: '0.01' }}
@@ -191,7 +204,11 @@ export default function UserDashboard() {
               <Typography>{entry.description}</Typography>
               <Typography variant="body2" color="text.secondary">{new Date(entry.createdAt).toLocaleDateString('en-NG')} · {entry.status}</Typography>
             </div>
-            <Typography>{naira.format(Number(entry.amount))}</Typography>
+            <Stack alignItems="flex-end">
+              <Typography>{naira.format(Number(entry.amount))}</Typography>
+              {entry.status === 'completed' &&
+                <Button size="small" onClick={() => download(`receipts/${entry.id}`, `receipt-${entry.id}.pdf`)}>Download receipt</Button>}
+            </Stack>
           </Stack>)}
         </CardContent></Card>
       </>}

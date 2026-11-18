@@ -24,6 +24,13 @@ function client(base) {
       const equal = pair.indexOf('=');
       cookies.set(pair.slice(0, equal), pair.slice(equal + 1));
     }
+    if (result.headers.get('content-type') === 'application/pdf') {
+      assert.equal(result.status, status);
+      assert.match(result.headers.get('content-disposition'), /attachment/);
+      const buffer = Buffer.from(await result.arrayBuffer());
+      assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
+      return buffer;
+    }
     const json = result.status === 204 ? null : await result.json();
     assert.equal(result.status, status, path + ' returned ' + JSON.stringify(json));
     return json;
@@ -138,6 +145,12 @@ test('onboarding, rotating sessions, member approval, and cooperative isolation'
   const receipt = (await adminA.request('/transactions', 'POST', deposit, 201)).data;
   await adminA.request('/transactions', 'POST', deposit, 409);
   await adminB.request('/transactions/' + receipt.id, 'GET', undefined, 404);
+  const memberReceipt = await memberClient.request('/documents/receipts/' + receipt.id);
+  assert(memberReceipt.length > 1000);
+  await adminB.request('/documents/receipts/' + receipt.id, 'GET', undefined, 404);
+  const savingsStatement = await memberClient.request('/documents/my-savings-statement');
+  assert(savingsStatement.length > 1000);
+  await adminA.request('/documents/my-savings-statement', 'GET', undefined, 403);
   assert.equal((await memberClient.request('/transactions/my')).results, 1);
   assert.equal((await memberClient.request('/members/my')).data.savings, '1200.05');
   assert.equal((await adminA.request('/dashboard')).data.totalSavings, '1200.05');
@@ -145,6 +158,7 @@ test('onboarding, rotating sessions, member approval, and cooperative isolation'
 
   const withdrawal = (await memberClient.request('/transactions/withdrawals', 'POST', { amount: '100.05' }, 201)).data;
   assert.equal(withdrawal.status, 'pending');
+  await memberClient.request('/documents/receipts/' + withdrawal.id, 'GET', undefined, 404);
   await memberClient.request('/transactions/withdrawals', 'POST', { amount: '1100.01' }, 409);
   assert.equal((await memberClient.request('/members/my')).data.savings, '1200.05');
   await adminB.request('/transactions/withdrawals/' + withdrawal.id + '/approve', 'PATCH', undefined, 404);

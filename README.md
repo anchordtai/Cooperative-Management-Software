@@ -25,7 +25,7 @@ Register a cooperative at `/register` and follow the verification link in the em
 - After approval and independent confirmation of an external transfer, an administrator records its reference to disburse the loan in the system. The application does not initiate transfers.
 - The backend generates monthly instalments, rounds total interest once to the nearest kobo, and allocates repayments to the oldest instalment first, with interest before principal. A recorded repayment reference cannot be used twice on the same loan.
 - Members submit withdrawal requests. Pending requests reserve the amount. An authorised officer rejects the request or records its confirmed payout reference. The backend rechecks the available savings when recording the payout.
-- Deposits, approved withdrawals, disbursements and repayments produce paired debit and credit postings in the same database transaction. The activity report aggregates completed transactions across the full period and supports CSV export.
+- Deposits, approved withdrawals, disbursements and repayments produce paired debit and credit postings in the same database transaction. The activity report aggregates completed transactions across the full period and supports CSV export. Members can download PDF receipts and a savings activity statement for the previous 12 months.
 
 ## Paystack test checkout
 
