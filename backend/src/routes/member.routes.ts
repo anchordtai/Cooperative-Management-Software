@@ -1,19 +1,17 @@
-import express from 'express';
-import { authenticate } from '../middleware/auth';
+import { Router } from 'express';
+import { authenticate, restrictTo } from '../middleware/auth';
 import {
-  getAllMembers,
-  getMemberById,
-  createMember,
-  updateMember,
-  deleteMember,
+  getAllMembers, getMemberById, getOwnMember, createMember, updateMember, deleteMember, inviteMember
 } from '../controllers/member.controller';
 
-const router = express.Router();
-
-router.get('/', authenticate, getAllMembers);
-router.get('/:id', authenticate, getMemberById);
-router.post('/', authenticate, createMember);
-router.put('/:id', authenticate, updateMember);
-router.delete('/:id', authenticate, deleteMember);
+const router = Router();
+router.use(authenticate);
+router.get('/my', getOwnMember);
+router.get('/', restrictTo('admin', 'staff'), getAllMembers);
+router.get('/:id', restrictTo('admin', 'staff'), getMemberById);
+router.post('/', restrictTo('admin'), createMember);
+router.put('/:id', restrictTo('admin'), updateMember);
+router.delete('/:id', restrictTo('admin'), deleteMember);
+router.post('/:id/invite', restrictTo('admin'), inviteMember);
 
 export default router;

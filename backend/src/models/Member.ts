@@ -1,10 +1,13 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from '../config/database';
+import Cooperative from './Cooperative';
 import { User } from './User';
 
 class Member extends Model {
   public id!: string;
-  public userId!: string;
+  declare cooperativeId: string | null;
+  declare userId: string | null;
+  declare email: string;
   public membershipNumber!: string;
   public firstName!: string;
   public lastName!: string;
@@ -21,14 +24,20 @@ class Member extends Model {
 
 Member.init(
   {
+    cooperativeId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: Cooperative, key: 'id' },
+    },
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    email: { type: DataTypes.STRING, allowNull: true, validate: { isEmail: true } },
     userId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: User,
         key: 'id',
@@ -57,7 +66,7 @@ Member.init(
     },
     dateOfBirth: {
       type: DataTypes.DATE,
-      allowNull: false,
+      allowNull: true,
     },
     joinDate: {
       type: DataTypes.DATE,

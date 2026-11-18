@@ -12,38 +12,33 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
+    "X-ECooperative-Request": "1",
   },
   withCredentials: true, // Ensure credentials (cookies, etc.) are sent with requests
 });
 
-// Add an interceptor to handle errors globally (optional)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle CORS or other errors globally
-    if (error.response?.status === 401) {
-      console.error("Unauthorized access - perhaps login is required.");
-    } else if (error.response?.status === 403) {
-      console.error(
-        "Forbidden - you do not have permission to access this resource."
-      );
-    } else if (error.message.includes("Network Error")) {
-      console.error("Network Error - please check your backend server.");
-    }
-    return Promise.reject(error);
+let refreshRequest: Promise<unknown> | undefined;
+api.interceptors.response.use(undefined, async (error) => {
+  const request = error.config;
+  if (error.response?.status !== 401 || !request || request.retried ||
+    (request.url?.startsWith('/auth/') && request.url !== '/auth/me')) {
+    throw error;
   }
-);
+  request.retried = true;
+  refreshRequest ||= api.post('/auth/refresh-token').finally(() => { refreshRequest = undefined; });
+  await refreshRequest;
+  return api(request);
+});
 
 // Auth services
 export const authService = {
   login: async (
     email: string,
-    password: string,
-    twoFAMethod?: "email" | "sms"
+    password: string
   ) => {
     const response = await api.post(
       "/auth/login",
-      twoFAMethod ? { email, password, twoFAMethod } : { email, password }
+      { email, password }
     );
     return response.data;
   },
@@ -80,6 +75,10 @@ export const memberService = {
   },
   update: async (id: string, memberData: any) => {
     const response = await api.put(`/members/${id}`, memberData);
+    return response.data;
+  },
+  invite: async (id: string) => {
+    const response = await api.post(`/members/${id}/invite`);
     return response.data;
   },
   delete: async (id: string) => {
@@ -123,11 +122,11 @@ export const loanService = {
     return response.data;
   },
   approve: async (id: string) => {
-    const response = await api.post(`/financial/loans/${id}/approve`);
+    const response = await api.patch(`/financial/loans/${id}/approve`);
     return response.data;
   },
   reject: async (id: string) => {
-    const response = await api.post(`/financial/loans/${id}/reject`);
+    const response = await api.patch(`/financial/loans/${id}/reject`);
     return response.data;
   },
 };

@@ -1,127 +1,77 @@
-import express from 'express';
-import { Request, Response, NextFunction } from 'express';
-import { authenticate } from '../middleware/auth';
+import { Request, Response, NextFunction, Router } from 'express';
+import { authenticate, restrictTo } from '../middleware/auth';
+import { financialScope, pagination } from '../middleware/cooperative';
 import { AppError } from '../middleware/errorHandler';
+import sequelize from '../config/database';
 import Transaction from '../models/Transaction';
 import Member from '../models/Member';
 
-const router = express.Router();
+const memberDetails = { model: Member, as: 'Member', attributes: ['firstName', 'lastName'] };
 
-// Get all transactions
-router.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+export const getAllTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = '1', limit = '10', type, memberId } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const offset = (pageNum - 1) * limitNum;
-
-    // Build where clause for filtering
-    const whereClause: any = {};
-    if (type) whereClause.type = type;
-    if (memberId) whereClause.memberId = memberId;
-
-    const { count, rows: transactions } = await Transaction.findAndCountAll({
-      where: whereClause,
-      limit: limitNum,
-      offset: offset,
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }],
-      order: [['createdAt', 'DESC']]
-    });
-
-    res.status(200).json({
-      status: 'success',
-      results: count,
-      totalPages: Math.ceil(count / limitNum),
-      currentPage: pageNum,
-      data: transactions
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Create a transaction
-router.post('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { memberId, type, amount, description } = req.body;
-    
-    if (!memberId || !type || !amount) {
-      return next(new AppError('Please provide required fields', 400));
+    const scope = await financialScope(req, req.params.memberId || req.query.memberId);
+    const { currentPage, limitNum, offset } = pagination(req);
+    const { type } = req.query;
+    if (type !== undefined && (typeof type !== 'string' || !['deposit', 'withdrawal', 'loan', 'repayment'].includes(type))) {
+      throw new AppError('Invalid transaction type', 400);
     }
-
-    const newTransaction = await Transaction.create({
-      memberId,
-      type,
-      amount: parseFloat(amount),
-      description,
-      status: 'completed'
+    const { count, rows } = await Transaction.findAndCountAll({
+      where: { ...scope, ...(type === undefined ? {} : { type }) },
+      include: [memberDetails],
+      limit: limitNum, offset, order: [['createdAt', 'DESC'], ['id', 'DESC']]
     });
-
-    res.status(201).json({ status: 'success', data: newTransaction });
+    res.json({ status: 'success', results: count, totalPages: Math.ceil(count / limitNum), currentPage, data: rows });
   } catch (error) {
     next(error);
   }
-});
+};
 
-// Get transaction by ID
-router.get('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+export const getTransactionById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const transaction = await Transaction.findByPk(req.params.id, {
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }]
+    const transaction = await Transaction.findOne({
+      where: { ...await financialScope(req), id: req.params.id }, include: [memberDetails]
     });
-    if (!transaction) return next(new AppError('Transaction not found', 404));
-    res.status(200).json({ status: 'success', data: transaction });
+    if (!transaction) throw new AppError('Transaction not found', 404);
+    res.json({ status: 'success', data: transaction });
   } catch (error) {
     next(error);
   }
-});
+};
 
-// Get transactions by member
-router.get('/member/:memberId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+export const createTransaction = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const transactions = await Transaction.findAll({
-      where: { memberId: req.params.memberId },
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }],
-      order: [['createdAt', 'DESC']]
+    const { memberId, description, type } = req.body;
+    const { cooperativeId } = req.user!;
+    const amount = String(req.body.amount);
+    if (typeof memberId !== 'string' || typeof description !== 'string' || !description.trim() ||
+      description.length > 1000 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
+      throw new AppError('Enter a member, description and positive amount with up to two decimal places', 400);
+    }
+    if (type !== 'deposit') throw new AppError('This endpoint records savings deposits only', 400);
+
+    const entry = await sequelize.transaction(async transaction => {
+      const member = await Member.findOne({
+        where: { id: memberId, cooperativeId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE
+      });
+      if (!member) throw new AppError('Active member not found', 404);
+      await member.increment('savings', { by: Number(amount), transaction });
+      return Transaction.create({
+        cooperativeId, memberId, type, amount, description: description.trim(), status: 'completed'
+      }, { transaction });
     });
-    res.status(200).json({ status: 'success', results: transactions.length, data: transactions });
+    res.status(201).json({ status: 'success', data: entry });
   } catch (error) {
     next(error);
   }
-});
+};
 
-// Get transactions for the authenticated user
-router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // 1. Get the userId from the JWT
-    const userId = (req as any).user?.id;
-    if (!userId) return next(new AppError('User not authenticated', 401));
+const router = Router();
+router.use(authenticate);
+router.get('/', getAllTransactions);
+router.get('/my', restrictTo('member'), getAllTransactions);
+router.get('/member/:memberId', getAllTransactions);
+router.get('/:id', getTransactionById);
+router.post('/', restrictTo('admin'), createTransaction);
 
-    // 2. Find the member for this user
-    const member = await Member.findOne({ where: { userId } });
-    if (!member) return next(new AppError('Member not found for user', 404));
-
-    // 3. Get all transactions for this member
-    const transactions = await Transaction.findAll({
-      where: { memberId: member.id },
-      order: [['createdAt', 'DESC']]
-    });
-    res.status(200).json({ status: 'success', results: transactions.length, data: transactions });
-  } catch (error) {
-    next(error);
-  }
-});
-
-export default router; 
+export default router;

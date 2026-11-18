@@ -15,9 +15,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string, twoFAMethod?: 'email' | 'sms') => Promise<any>;
-  register: (userData: any) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<any>;
+  register: (userData: any) => Promise<{ delivered: boolean }>;
+  logout: () => Promise<void>;
   require2FA: boolean;
   verify2FA: (email: string, code: string) => Promise<void>;
   pending2FAEmail: string;
@@ -44,12 +44,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string, twoFAMethod?: 'email' | 'sms') => {
+  const login = async (email: string, password: string) => {
     try {
       setError(null);
       setRequire2FA(false);
       setPending2FAEmail('');
-      const response = await authService.login(email, password, twoFAMethod);
+      const response = await authService.login(email, password);
       if (response.require2FA) {
         setRequire2FA(true);
         setPending2FAEmail(email);
@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       // Fetch user after login
       const me = await authService.getMe();
-      setUser(me.data.user);
+      setUser(me.user);
       return response;
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Login failed';
@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await authService.verify2FA(email, code);
       // Fetch user after 2FA
       const me = await authService.getMe();
-      setUser(me.data.user);
+      setUser(me.user);
       setRequire2FA(false);
       setPending2FAEmail('');
     } catch (err: any) {
@@ -100,10 +100,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Passwords do not match');
       }
       const { confirmPassword, ...registrationData } = userData;
-      await authService.register(registrationData);
-      // Fetch user after register
-      const me = await authService.getMe();
-      setUser(me.data.user);
+      const result = await authService.register(registrationData);
+      return result.data;
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Registration failed');
       throw err;

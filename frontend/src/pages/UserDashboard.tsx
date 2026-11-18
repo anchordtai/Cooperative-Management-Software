@@ -1,123 +1,119 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Grid, Card, CardContent, Typography, Button, Avatar, Divider } from '@mui/material';
-// import { PieChart } from '@mui/x-charts';
+import React, { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@mui/material';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
-const UserDashboard: React.FC = () => {
-  const [profile, setProfile] = useState<any>(null);
-  const [loans, setLoans] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+interface Loan {
+  id: string;
+  purpose: string;
+  status: string;
+  amount: string;
+  remainingBalance: string;
+}
+interface Entry {
+  id: string;
+  type: string;
+  amount: string;
+  description: string;
+  createdAt: string;
+}
+interface Profile {
+  firstName: string;
+  membershipNumber: string;
+  savings: string;
+}
 
-  useEffect(() => {
-    // Fetch user profile
-    api.get('/auth/me').then(res => setProfile(res.data.data));
-    // Fetch user loans
-    api.get('/financial/loans/my').then(res => setLoans(res.data.data));
-    // Fetch user transactions
-    api.get('/transactions/my').then(res => setTransactions(res.data.data));
+const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
+
+export default function UserDashboard() {
+  const { logout } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [transactions, setTransactions] = useState<Entry[]>([]);
+  const [application, setApplication] = useState({ amount: '', term: '', purpose: '' });
+  const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [member, loanList, financialHistory] = await Promise.all([
+      api.get('/members/my'), api.get('/financial/loans/my'), api.get('/transactions/my')
+    ]);
+    setProfile(member.data.data);
+    setLoans(loanList.data.data);
+    setTransactions(financialHistory.data.data);
   }, []);
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>Welcome, {profile?.firstName || 'User'}!</Typography>
-      <Grid container spacing={3}>
-        {/* Overview Cards */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Total Loan Balance</Typography>
-              <Typography variant="h4" color="primary">₦{loans.reduce((sum, l) => sum + (l.balance || 0), 0)}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Total Paid</Typography>
-              <Typography variant="h4" color="secondary">₦{transactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + (t.amount || 0), 0)}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Next Payment Due</Typography>
-              <Typography variant="h4">{loans[0]?.nextDueDate ? new Date(loans[0].nextDueDate).toLocaleDateString() : '--'}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        {/* Profile Section */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Box display="flex" flexDirection="column" alignItems="center">
-                <Avatar sx={{ width: 64, height: 64, mb: 2 }}>{profile?.firstName?.[0]}</Avatar>
-                <Typography variant="h6">{profile?.firstName} {profile?.lastName}</Typography>
-                <Typography color="textSecondary">{profile?.email}</Typography>
-                <Typography color="textSecondary">{profile?.phone}</Typography>
-                <Button variant="outlined" sx={{ mt: 2 }}>Edit Profile</Button>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        {/* Loans Section */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>My Loans</Typography>
-              <Divider sx={{ mb: 2 }} />
-              {loans.length === 0 ? <Typography>No loans found.</Typography> : (
-                <Box>
-                  {loans.map((loan, idx) => (
-                    <Box key={loan.id} mb={2}>
-                      <Typography><b>Amount:</b> ₦{loan.amount} | <b>Status:</b> {loan.status} | <b>Due:</b> {loan.dueDate ? new Date(loan.dueDate).toLocaleDateString() : '--'}</Typography>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-              <Button variant="contained" sx={{ mt: 2 }}>Request New Loan</Button>
-            </CardContent>
-          </Card>
-        </Grid>
-        {/* Transactions Section */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>My Transactions</Typography>
-              <Divider sx={{ mb: 2 }} />
-              {transactions.length === 0 ? <Typography>No transactions found.</Typography> : (
-                <Box>
-                  {transactions.map((tx, idx) => (
-                    <Box key={tx.id} mb={1}>
-                      <Typography><b>{tx.type}</b> - ₦{tx.amount} on {new Date(tx.date).toLocaleDateString()}</Typography>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-        {/* Simple Chart Section */}
-        {/* <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Loan vs Payment Chart</Typography>
-              <PieChart
-                series={[{
-                  data: [
-                    { id: 0, value: loans.reduce((sum, l) => sum + (l.amount || 0), 0), label: 'Loans' },
-                    { id: 1, value: transactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + (t.amount || 0), 0), label: 'Payments' },
-                  ],
-                }]}
-                width={300}
-                height={200}
-              />
-            </CardContent>
-          </Card>
-        </Grid> */}
-      </Grid>
-    </Box>
-  );
-};
+  useEffect(() => {
+    load().catch(() => setNotice({ error: true, text: 'Could not load your membership records.' }));
+  }, [load]);
 
-export default UserDashboard; 
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await api.post('/financial/loans', application);
+      setApplication({ amount: '', term: '', purpose: '' });
+      setNotice({ error: false, text: 'Loan application submitted for review.' });
+      await load();
+    } catch (error: any) {
+      setNotice({ error: true, text: error.response?.data?.message || 'Could not save the application.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Stack spacing={3} sx={{ maxWidth: 1120, mx: 'auto', p: { xs: 2, sm: 4 } }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <div>
+          <Typography component="h1" variant="h4">{profile ? `Welcome, ${profile.firstName}` : 'Member portal'}</Typography>
+          {profile && <Typography color="text.secondary">{profile.membershipNumber}</Typography>}
+        </div>
+        <Button onClick={() => logout().catch(() => setNotice({ error: true, text: 'Sign out failed. Try again.' }))}>Sign out</Button>
+      </Stack>
+      {notice && <Alert severity={notice.error ? 'error' : 'success'}>{notice.text}</Alert>}
+      {profile && <>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={5}>
+            <Card variant="outlined"><CardContent>
+              <Typography color="text.secondary">Savings balance</Typography>
+              <Typography variant="h5">{naira.format(Number(profile.savings))}</Typography>
+            </CardContent></Card>
+          </Grid>
+          <Grid item xs={12} md={7}>
+            <Card variant="outlined"><CardContent>
+              <Stack component="form" spacing={2} onSubmit={submit}>
+                <Typography component="h2" variant="h6">Apply for a loan</Typography>
+                <TextField label="Amount (NGN)" required type="number" inputProps={{ min: '0.01', step: '0.01' }}
+                  value={application.amount} onChange={e => setApplication({ ...application, amount: e.target.value })} />
+                <TextField label="Term in months" required type="number" inputProps={{ min: 1, max: 120 }}
+                  value={application.term} onChange={e => setApplication({ ...application, term: e.target.value })} />
+                <TextField label="Purpose" required inputProps={{ maxLength: 255 }}
+                  value={application.purpose} onChange={e => setApplication({ ...application, purpose: e.target.value })} />
+                <Button type="submit" variant="contained" disabled={busy}>Submit application</Button>
+              </Stack>
+            </CardContent></Card>
+          </Grid>
+        </Grid>
+        <Card variant="outlined"><CardContent>
+          <Typography component="h2" variant="h6" gutterBottom>My loans</Typography>
+          {loans.length === 0 && <Typography color="text.secondary">No loan applications yet.</Typography>}
+          {loans.map(loan => <Typography key={loan.id} sx={{ mt: 1 }}>
+            {loan.purpose} · {naira.format(Number(loan.amount))} · {loan.status}
+          </Typography>)}
+        </CardContent></Card>
+        <Card variant="outlined"><CardContent>
+          <Typography component="h2" variant="h6" gutterBottom>Recent transactions</Typography>
+          {transactions.length === 0 && <Typography color="text.secondary">No transactions yet.</Typography>}
+          {transactions.map(entry => <Stack key={entry.id} direction="row" justifyContent="space-between" spacing={2} sx={{ mt: 1 }}>
+            <div>
+              <Typography>{entry.description}</Typography>
+              <Typography variant="body2" color="text.secondary">{new Date(entry.createdAt).toLocaleDateString('en-NG')}</Typography>
+            </div>
+            <Typography>{naira.format(Number(entry.amount))}</Typography>
+          </Stack>)}
+        </CardContent></Card>
+      </>}
+    </Stack>
+  );
+}

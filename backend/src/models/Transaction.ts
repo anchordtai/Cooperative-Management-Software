@@ -1,9 +1,11 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from '../config/database';
+import Cooperative from './Cooperative';
 import Member from './Member';
 
 class Transaction extends Model {
   public id!: string;
+  declare cooperativeId: string | null;
   public memberId!: string;
   public type!: 'deposit' | 'withdrawal' | 'loan' | 'repayment';
   public amount!: number;
@@ -15,6 +17,11 @@ class Transaction extends Model {
 
 Transaction.init(
   {
+    cooperativeId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: Cooperative, key: 'id' },
+    },
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,

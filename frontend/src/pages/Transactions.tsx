@@ -16,16 +16,18 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 import { transactionService, memberService } from '../services/api';
 
 interface Transaction {
   id: string;
   memberId: string;
   memberName: string;
-  type: 'deposit' | 'withdrawal' | 'loan_payment';
+  type: string;
   amount: number;
   description: string;
-  date: string;
+  createdAt: string;
+  Member?: Member;
   status: 'pending' | 'completed' | 'failed';
 }
 
@@ -36,6 +38,7 @@ interface Member {
 }
 
 const Transactions: React.FC = () => {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,16 +53,16 @@ const Transactions: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 90 },
-    { field: 'memberName', headerName: 'Member', width: 200 },
+    { field: 'memberName', headerName: 'Member', width: 200, valueGetter: ({ row }) => row.Member ? `${row.Member.firstName} ${row.Member.lastName}` : '' },
     { field: 'type', headerName: 'Type', width: 130 },
     {
       field: 'amount',
       headerName: 'Amount',
       width: 130,
-      valueFormatter: (params) => `₦${params.value.toLocaleString()}`,
+      valueFormatter: (params) => `₦${Number(params.value).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
     },
     { field: 'description', headerName: 'Description', width: 200 },
-    { field: 'date', headerName: 'Date', width: 180 },
+    { field: 'createdAt', headerName: 'Date', width: 180, valueFormatter: params => new Date(params.value).toLocaleDateString('en-NG') },
     {
       field: 'status',
       headerName: 'Status',
@@ -127,12 +130,12 @@ const Transactions: React.FC = () => {
     try {
       await transactionService.create({
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: formData.amount,
       });
       handleCloseDialog();
       fetchTransactions();
     } catch (err: any) {
-      setError(err.message || 'Failed to create transaction');
+      setError(err.response?.data?.message || 'Failed to create transaction');
     }
   };
 
@@ -140,13 +143,13 @@ const Transactions: React.FC = () => {
     <Box sx={{ height: 600, width: '100%' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Transactions</Typography>
-        <Button
+        {user?.role === 'admin' && <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={handleOpenDialog}
         >
-          New Transaction
-        </Button>
+          Record deposit
+        </Button>}
       </Box>
 
       {error && (
@@ -170,7 +173,7 @@ const Transactions: React.FC = () => {
       />
 
       <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>New Transaction</DialogTitle>
+        <DialogTitle>Record savings deposit</DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
             <FormControl fullWidth margin="dense">
@@ -188,22 +191,6 @@ const Transactions: React.FC = () => {
                     {member.firstName} {member.lastName}
                   </MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Transaction Type</InputLabel>
-              <Select
-                value={formData.type}
-                label="Transaction Type"
-                onChange={(e) =>
-                  setFormData({ ...formData, type: e.target.value })
-                }
-                required
-              >
-                <MenuItem value="deposit">Deposit</MenuItem>
-                <MenuItem value="withdrawal">Withdrawal</MenuItem>
-                <MenuItem value="loan_payment">Loan Payment</MenuItem>
               </Select>
             </FormControl>
 

@@ -1,278 +1,98 @@
-import express from 'express';
-import { Request, Response, NextFunction } from 'express';
-import { authenticate } from '../middleware/auth';
+import { Router, Request, Response, NextFunction } from 'express';
+import { authenticate, restrictTo } from '../middleware/auth';
+import { financialScope, ownMember, pagination } from '../middleware/cooperative';
 import { AppError } from '../middleware/errorHandler';
-import Transaction from '../models/Transaction';
 import Loan from '../models/Loan';
 import Member from '../models/Member';
+import { createTransaction, getAllTransactions, getTransactionById } from './transactions.routes';
 
+const memberDetails = { model: Member, as: 'Member', attributes: ['firstName', 'lastName'] };
+const loanStatuses = ['pending', 'approved', 'rejected', 'active', 'completed'];
 
-const router = express.Router();
-
-// Transaction endpoints
-export const getAllTransactions = async (req: Request, res: Response, next: NextFunction) => {
+const getAllLoans = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = '1', limit = '10', type, memberId } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const offset = (pageNum - 1) * limitNum;
-
-    // Build where clause for filtering
-    const whereClause: any = {};
-    if (type) whereClause.type = type;
-    if (memberId) whereClause.memberId = memberId;
-
-    const { count, rows: transactions } = await Transaction.findAndCountAll({
-      where: whereClause,
-      limit: limitNum,
-      offset: offset,
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }],
-      order: [['createdAt', 'DESC']]
+    const scope = await financialScope(req, req.query.memberId);
+    const { currentPage, limitNum, offset } = pagination(req);
+    const { status } = req.query;
+    if (status !== undefined && (typeof status !== 'string' || !loanStatuses.includes(status))) {
+      throw new AppError('Invalid loan status', 400);
+    }
+    const { count, rows } = await Loan.findAndCountAll({
+      where: { ...scope, ...(status === undefined ? {} : { status }) },
+      include: [memberDetails], limit: limitNum, offset, order: [['createdAt', 'DESC'], ['id', 'DESC']]
     });
-
-    res.status(200).json({
-      status: 'success',
-      results: count,
-      totalPages: Math.ceil(count / limitNum),
-      currentPage: pageNum,
-      data: transactions
-    });
+    res.json({ status: 'success', results: count, totalPages: Math.ceil(count / limitNum), currentPage, data: rows });
   } catch (error) {
     next(error);
   }
 };
 
-export const createTransaction = async (req: Request, res: Response, next: NextFunction) => {
+const createLoan = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { memberId, type, amount, description } = req.body;
-
-    // Validate required fields
-    if (!memberId || !type || !amount) {
-      return next(new AppError('Please provide required fields', 400));
+    const { cooperativeId, role } = req.user!;
+    const { purpose } = req.body;
+    const amount = String(req.body.amount);
+    const term = Number(req.body.term);
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(amount) || Number(amount) <= 0 ||
+      typeof purpose !== 'string' || !purpose.trim() || purpose.length > 255 ||
+      !['string', 'number'].includes(typeof req.body.term) || !Number.isInteger(term) || term < 1 || term > 120) {
+      throw new AppError('Enter an amount, purpose and loan term from 1 to 120 months', 400);
     }
-
-    const newTransaction = await Transaction.create({
-      memberId,
-      type,
-      amount: parseFloat(amount),
-      description,
-      status: 'completed'
+    const member = role === 'member' ? await ownMember(req) : await Member.findOne({
+      where: { cooperativeId, id: req.body.memberId ?? null, status: 'active' }
     });
+    if (!member) throw new AppError('Active member not found', 404);
 
-    res.status(201).json({
-      status: 'success',
-      data: newTransaction
+    const loan = await Loan.create({
+      cooperativeId, memberId: member.id, amount, purpose: purpose.trim(), term, interestRate: 5,
+      status: 'pending', remainingBalance: 0, startDate: null, endDate: null
     });
+    res.status(201).json({ status: 'success', data: loan });
   } catch (error) {
     next(error);
   }
 };
 
-export const getTransactionById = async (req: Request, res: Response, next: NextFunction) => {
+const getLoanById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const transaction = await Transaction.findByPk(req.params.id, {
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }]
+    const loan = await Loan.findOne({
+      where: { ...await financialScope(req), id: req.params.id }, include: [memberDetails]
     });
-    
-    if (!transaction) {
-      return next(new AppError('Transaction not found', 404));
-    }
-    
-    res.status(200).json({
-      status: 'success',
-      data: transaction
-    });
+    if (!loan) throw new AppError('Loan not found', 404);
+    res.json({ status: 'success', data: loan });
   } catch (error) {
     next(error);
   }
 };
 
-// Loan endpoints
-export const getAllLoans = async (req: Request, res: Response, next: NextFunction) => {
+const decideLoan = (status: 'approved' | 'rejected') => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = '1', limit = '10', status, memberId } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const offset = (pageNum - 1) * limitNum;
-
-    // Build where clause for filtering
-    const whereClause: any = {};
-    if (status) whereClause.status = status;
-    if (memberId) whereClause.memberId = memberId;
-
-    const { count, rows: loans } = await Loan.findAndCountAll({
-      where: whereClause,
-      limit: limitNum,
-      offset: offset,
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }],
-      order: [['createdAt', 'DESC']]
+    const where = { id: req.params.id, cooperativeId: req.user!.cooperativeId };
+    const [updated, loans] = await Loan.update({ status }, {
+      where: { ...where, status: 'pending' }, returning: true
     });
-
-    res.status(200).json({
-      status: 'success',
-      results: count,
-      totalPages: Math.ceil(count / limitNum),
-      currentPage: pageNum,
-      data: loans
-    });
+    if (!updated) {
+      const scoped = await Loan.findOne({ where, attributes: ['id'] });
+      if (!scoped) throw new AppError('Loan not found', 404);
+      throw new AppError('Only pending loans can be reviewed', 409);
+    }
+    res.json({ status: 'success', data: loans[0] });
   } catch (error) {
     next(error);
   }
 };
 
-export const createLoan = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { memberId, amount, purpose, term, interestRate } = req.body;
-
-    // Validate required fields
-    if (!memberId || !amount || !purpose || !term) {
-      return next(new AppError('Please provide required fields', 400));
-    }
-
-    const newLoan = await Loan.create({
-      memberId,
-      amount: parseFloat(amount),
-      purpose,
-      term,
-      interestRate: interestRate || 5.0, // Default interest rate
-      status: 'pending',
-      remainingBalance: parseFloat(amount),
-      startDate: new Date(),
-      endDate: new Date(Date.now() + term * 30 * 24 * 60 * 60 * 1000) // term in months
-    });
-
-    res.status(201).json({
-      status: 'success',
-      data: newLoan
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getLoanById = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const loan = await Loan.findByPk(req.params.id, {
-      include: [{
-        model: Member,
-        as: 'member',
-        attributes: ['firstName', 'lastName']
-      }]
-    });
-    
-    if (!loan) {
-      return next(new AppError('Loan not found', 404));
-    }
-    
-    res.status(200).json({
-      status: 'success',
-      data: loan
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const approveLoan = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const loan = await Loan.findByPk(req.params.id);
-    
-    if (!loan) {
-      return next(new AppError('Loan not found', 404));
-    }
-
-    if (loan.status !== 'pending') {
-      return next(new AppError('Loan is not in pending status', 400));
-    }
-
-    await loan.update({
-      status: 'approved',
-      startDate: new Date()
-    });
-
-    res.status(200).json({
-      status: 'success',
-      data: loan
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const rejectLoan = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const loan = await Loan.findByPk(req.params.id);
-    
-    if (!loan) {
-      return next(new AppError('Loan not found', 404));
-    }
-
-    if (loan.status !== 'pending') {
-      return next(new AppError('Loan is not in pending status', 400));
-    }
-
-    await loan.update({
-      status: 'rejected'
-    });
-
-    res.status(200).json({
-      status: 'success',
-      data: loan
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Get user's loans (for authenticated users)
-export const getUserLoans = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = (req as any).user.id;
-
-    // Find the member for this user
-    const member = await Member.findOne({ where: { userId } });
-    if (!member) {
-      return next(new AppError('Member not found for user', 404));
-    }
-
-    // Get all loans for this member
-    const loans = await Loan.findAll({
-      where: { memberId: member.id },
-      order: [['createdAt', 'DESC']]
-    });
-
-    res.status(200).json({
-      status: 'success',
-      results: loans.length,
-      data: loans
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Routes
-router.get('/transactions', authenticate, getAllTransactions);
-router.post('/transactions', authenticate, createTransaction);
-router.get('/transactions/:id', authenticate, getTransactionById);
-
-router.get('/loans', authenticate, getAllLoans);
-router.post('/loans', authenticate, createLoan);
-router.get('/loans/:id', authenticate, getLoanById);
-router.patch('/loans/:id/approve', authenticate, approveLoan);
-router.patch('/loans/:id/reject', authenticate, rejectLoan);
-router.get('/my-loans', authenticate, getUserLoans);
+const router = Router();
+router.use(authenticate);
+router.get('/transactions', getAllTransactions);
+router.get('/transactions/:id', getTransactionById);
+router.post('/transactions', restrictTo('admin'), createTransaction);
+router.get('/loans', getAllLoans);
+router.get('/loans/my', restrictTo('member'), getAllLoans);
+router.get('/my-loans', restrictTo('member'), getAllLoans);
+router.get('/loans/:id', getLoanById);
+router.post('/loans', restrictTo('admin', 'staff', 'member'), createLoan);
+router.patch('/loans/:id/approve', restrictTo('admin'), decideLoan('approved'));
+router.patch('/loans/:id/reject', restrictTo('admin'), decideLoan('rejected'));
 
 export default router;

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { useAuth } from './contexts/AuthContext';
@@ -15,67 +15,48 @@ import Settings from './pages/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
 import theme from './theme';
 import UserDashboard from './pages/UserDashboard';
-import { useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import VerifyAccount from './pages/VerifyAccount';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 
-// Protected Route component
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute = ({ children, roles }: { children: React.ReactNode; roles?: string[] }) => {
   const { user, loading } = useAuth();
-
-  if (loading) {
-    return <LoadingSpinner message="Checking authentication..." />;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-
+  if (loading) return <LoadingSpinner message="Checking authentication…" />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
-function App() {
+export default function App() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      if (user.role === 'admin') {
-        navigate('/dashboard');
-      } else {
-        navigate('/user-dashboard');
-      }
-    }
-  }, [user, navigate]);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Routes>
-        <Route path="/" element={user ? <Navigate to={user.role === 'admin' ? '/dashboard' : '/user-dashboard'} /> : <LandingPage />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/" element={user ? <Navigate replace to={user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/dashboard" element={<ProtectedRoute>{user && user.role === 'admin' ? <Dashboard /> : <Navigate to="/user-dashboard" />}</ProtectedRoute>} />
-        <Route path="/user-dashboard" element={<ProtectedRoute>{user && user.role !== 'admin' ? <UserDashboard /> : <Navigate to="/dashboard" />}</ProtectedRoute>} />
+        <Route path="/verify-account" element={<VerifyAccount />} />
+        <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+        <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><UserDashboard /></ProtectedRoute>} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="/app/members" />} />
+        <Route path="/app" element={<ProtectedRoute roles={['admin', 'staff']}><Layout /></ProtectedRoute>}>
+          <Route index element={<Dashboard />} />
           <Route path="members" element={<Members />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="loans" element={<Loans />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
         </Route>
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ThemeProvider>
   );
 }
-
-export default App;

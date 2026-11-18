@@ -1,9 +1,12 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from '../config/database';
+import Cooperative from './Cooperative';
 import bcrypt from 'bcryptjs';
 
 class User extends Model {
   public id!: string;
+  declare cooperativeId: string | null;
+  declare emailVerificationExpires: Date | null;
   public email!: string;
   public password!: string;
   public role!: string;
@@ -30,6 +33,11 @@ class User extends Model {
 
 User.init(
   {
+    cooperativeId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: Cooperative, key: 'id' },
+    },
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
@@ -59,6 +67,7 @@ User.init(
       type: DataTypes.ENUM('admin', 'member', 'staff'),
       defaultValue: 'member',
     },
+    emailVerificationExpires: { type: DataTypes.DATE },
     isEmailVerified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

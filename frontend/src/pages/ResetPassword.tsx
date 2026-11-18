@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Alert, Paper, Link } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 const ResetPassword: React.FC = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const query = new URLSearchParams(location.search);
-  const token = query.get('token') || '';
+  const token = new URLSearchParams(location.hash.slice(1)).get('token') || query.get('token') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);

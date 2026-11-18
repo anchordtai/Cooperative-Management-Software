@@ -19,7 +19,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, error, require2FA, verify2FA, pending2FAEmail } = useAuth();
+  const { login, verify2FA } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -29,13 +29,9 @@ const Login: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [localError, setLocalError] = useState('');
   const [show2FA, setShow2FA] = useState(false);
-  const [twoFAMethod, setTwoFAMethod] = useState<'email' | 'sms'>('email');
   const [pendingEmail, setPendingEmail] = useState('');
   const [redirectMessage, setRedirectMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [rateLimit, setRateLimit] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     if (location.state?.message) {
@@ -57,17 +53,12 @@ const Login: React.FC = () => {
     setLocalError('');
   };
 
-  // Debounce login API call
-  let loginTimeout: NodeJS.Timeout;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError('');
-    if (rateLimit) return;
-    setRateLimit(true);
-    loginTimeout = setTimeout(() => setRateLimit(false), 2000); // 2s debounce
     try {
       setLoading(true);
-      const result = await login(formData.email, formData.password, twoFAMethod);
+      const result = await login(formData.email, formData.password);
       
       if (result?.require2FA) {
         setShow2FA(true);
@@ -83,7 +74,7 @@ const Login: React.FC = () => {
         });
       } else {
         // Successful login - redirect to dashboard based on role
-        const redirectTo = result?.data?.redirectTo || '/';
+        const redirectTo = '/';
         navigate(redirectTo);
       }
     } catch (err: any) {
@@ -108,35 +99,6 @@ const Login: React.FC = () => {
     }
   };
 
-  // 2FA resend logic
-  const handleResend2FA = async (method: 'email' | 'sms') => {
-    if (resendCooldown > 0) return;
-    setTwoFAMethod(method);
-    setResendCooldown(30);
-    // Call backend resend endpoint
-    try {
-      if (method === 'email') {
-        await fetch('/api/auth/resend-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: pendingEmail }),
-        });
-      } else {
-        await fetch('/api/auth/resend-sms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: pendingEmail }),
-        });
-      }
-    } catch {}
-  };
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendCooldown]);
-
   return (
     <Container component="main" maxWidth="xs">
       <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -154,9 +116,9 @@ const Login: React.FC = () => {
               {redirectMessage}
             </Alert>
           )}
-          {(error || localError) && (
+          {localError && (
             <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
-              {error || localError}
+              {localError}
             </Alert>
           )}
           {!show2FA ? (
@@ -201,43 +163,6 @@ const Login: React.FC = () => {
                   ),
                 }}
               />
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, mb: 1 }}>
-                <input
-                  type="checkbox"
-                  id="rememberMe"
-                  name="rememberMe"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  aria-label="Remember Me"
-                  style={{ marginRight: 8 }}
-                />
-                <Typography variant="body2" component="label" htmlFor="rememberMe">
-                  Remember Me
-                </Typography>
-              </Box>
-              {rateLimit && (
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Please wait a moment before trying again.
-                </Alert>
-              )}
-              <Box sx={{ display: 'flex', gap: 2, mt: 2, mb: 1 }}>
-                <Button
-                  variant={twoFAMethod === 'email' ? 'contained' : 'outlined'}
-                  onClick={() => setTwoFAMethod('email')}
-                  fullWidth
-                  aria-label="2FA via Email"
-                >
-                  2FA via Email
-                </Button>
-                <Button
-                  variant={twoFAMethod === 'sms' ? 'contained' : 'outlined'}
-                  onClick={() => setTwoFAMethod('sms')}
-                  fullWidth
-                  aria-label="2FA via SMS"
-                >
-                  2FA via SMS
-                </Button>
-              </Box>
             <Button
               type="submit"
               fullWidth
@@ -261,7 +186,7 @@ const Login: React.FC = () => {
           ) : (
             <Box component="form" onSubmit={handle2FASubmit} sx={{ mt: 1, width: '100%' }} aria-label="2FA form">
               <Typography variant="body1" mb={2}>
-                Enter the 2FA code sent to your {twoFAMethod === 'sms' ? 'phone' : 'email'}.
+                Enter the 2FA code sent to your email.
               </Typography>
               <TextField
                 margin="normal"
@@ -284,26 +209,9 @@ const Login: React.FC = () => {
               >
                 {loading ? 'Verifying...' : 'Verify 2FA Code'}
               </Button>
-              <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
-                <Button
-                  variant={twoFAMethod === 'email' ? 'contained' : 'outlined'}
-                  onClick={() => handleResend2FA('email')}
-                  fullWidth
-                  aria-label="Resend 2FA via Email"
-                  disabled={resendCooldown > 0}
-                >
-                  {resendCooldown > 0 ? `Resend via Email (${resendCooldown}s)` : 'Resend via Email'}
-                </Button>
-                <Button
-                  variant={twoFAMethod === 'sms' ? 'contained' : 'outlined'}
-                  onClick={() => handleResend2FA('sms')}
-                  fullWidth
-                  aria-label="Resend 2FA via SMS"
-                  disabled={resendCooldown > 0}
-                >
-                  {resendCooldown > 0 ? `Resend via SMS (${resendCooldown}s)` : 'Resend via SMS'}
-                </Button>
-            </Box>
+              <Button onClick={() => { setShow2FA(false); setCode(''); }}>
+                Return to sign in
+              </Button>
           </Box>
           )}
         </Paper>

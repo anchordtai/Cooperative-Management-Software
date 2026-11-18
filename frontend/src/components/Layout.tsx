@@ -30,12 +30,12 @@ import { useAuth } from '../contexts/AuthContext';
 const drawerWidth = 240;
 
 const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  { text: 'Members', icon: <PeopleIcon />, path: '/members' },
-  { text: 'Transactions', icon: <AccountBalanceIcon />, path: '/transactions' },
-  { text: 'Loans', icon: <CreditCardIcon />, path: '/loans' },
-  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/app' },
+  { text: 'Members', icon: <PeopleIcon />, path: '/app/members' },
+  { text: 'Transactions', icon: <AccountBalanceIcon />, path: '/app/transactions' },
+  { text: 'Loans', icon: <CreditCardIcon />, path: '/app/loans' },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/app/reports' },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/app/settings' },
 ];
 
 const Layout: React.FC = () => {
@@ -43,15 +43,20 @@ const Layout: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const [logoutFailed, setLogoutFailed] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch {
+      setLogoutFailed(true);
+    }
   };
 
   const drawer = (
@@ -62,8 +67,8 @@ const Layout: React.FC = () => {
         </Typography>
       </Toolbar>
       <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} button onClick={() => navigate(item.path)}>
+        {menuItems.filter(item => item.text !== 'Settings' || user?.role === 'admin').map((item) => (
+          <ListItem key={item.text} button onClick={() => { navigate(item.path); setMobileOpen(false); }}>
             <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.text} />
           </ListItem>
@@ -72,7 +77,7 @@ const Layout: React.FC = () => {
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText primary="Logout" />
+          <ListItemText primary={logoutFailed ? "Sign out failed. Retry" : "Sign out"} />
         </ListItem>
       </List>
     </div>

@@ -24,11 +24,12 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { useAuth } from '../contexts/AuthContext';
 import { loanService, memberService } from '../services/api';
 
-// TODO: Replace with actual loan type
 interface Loan {
-  id: number;
+  id: string;
+  purpose: string;
   memberId: string;
   memberName?: string;
   amount: number;
@@ -36,7 +37,7 @@ interface Loan {
   term: number;
   startDate?: string;
   endDate?: string;
-  status: 'pending' | 'active' | 'completed' | 'defaulted';
+  status: 'pending' | 'approved' | 'rejected' | 'active' | 'completed';
   remainingBalance?: number;
 }
 
@@ -47,6 +48,10 @@ interface Member {
 }
 
 const Loans: React.FC = () => {
+  const { user } = useAuth();
+  const [selected, setSelected] = useState<Loan | null>(null);
+  const [deciding, setDeciding] = useState(false);
+  const [decisionError, setDecisionError] = useState('');
   const [loans, setLoans] = useState<Loan[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,9 +143,29 @@ const Loans: React.FC = () => {
     },
   ];
 
-  const handleViewLoan = (id: number) => {
-    // TODO: Implement view loan details
-    console.log('View loan:', id);
+  const handleViewLoan = async (id: string) => {
+    setDecisionError('');
+    try {
+      const result = await loanService.getById(id);
+      setSelected(result.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not load the loan details.');
+    }
+  };
+
+  const decide = async (decision: 'approve' | 'reject') => {
+    if (!selected) return;
+    setDeciding(true);
+    setDecisionError('');
+    try {
+      const result = await loanService[decision](selected.id);
+      setSelected(result.data);
+      await fetchLoans();
+    } catch (err: any) {
+      setDecisionError(err.response?.data?.message || 'Could not save the decision.');
+    } finally {
+      setDeciding(false);
+    }
   };
 
   const handleOpenDialog = () => {
@@ -157,13 +182,13 @@ const Loans: React.FC = () => {
     try {
       await loanService.create({
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: formData.amount,
         term: parseInt(formData.term),
       });
       handleCloseDialog();
       fetchLoans();
     } catch (err: any) {
-      setError(err.message || 'Failed to create loan');
+      setError(err.response?.data?.message || 'Failed to create loan');
     }
   };
 
@@ -231,6 +256,24 @@ const Loans: React.FC = () => {
           loading={loading}
         />
       </Paper>
+
+      <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Loan application</DialogTitle>
+        {selected && <DialogContent>
+          {decisionError && <Alert severity="error">{decisionError}</Alert>}
+          <Typography>Purpose · {selected.purpose}</Typography>
+          <Typography>Amount · ₦{selected.amount}</Typography>
+          <Typography>Term · {selected.term} months</Typography>
+          <Typography>Status · {selected.status}</Typography>
+        </DialogContent>}
+        <DialogActions>
+          <Button disabled={deciding} onClick={() => setSelected(null)}>Close</Button>
+          {user?.role === 'admin' && selected?.status === 'pending' && <>
+            <Button disabled={deciding} color="error" onClick={() => decide('reject')}>Reject</Button>
+            <Button disabled={deciding} variant="contained" onClick={() => decide('approve')}>Approve</Button>
+          </>}
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={openDialog} onClose={handleCloseDialog}>
         <DialogTitle>New Loan</DialogTitle>

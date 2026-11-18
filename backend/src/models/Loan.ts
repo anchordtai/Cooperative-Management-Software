@@ -1,9 +1,11 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from '../config/database';
+import Cooperative from './Cooperative';
 import Member from './Member';
 
 class Loan extends Model {
   public id!: string;
+  declare cooperativeId: string | null;
   public memberId!: string;
   public amount!: number;
   public purpose!: string;
@@ -19,6 +21,11 @@ class Loan extends Model {
 
 Loan.init(
   {
+    cooperativeId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: Cooperative, key: 'id' },
+    },
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
@@ -51,11 +58,11 @@ Loan.init(
     },
     startDate: {
       type: DataTypes.DATE,
-      allowNull: false,
+      allowNull: true,
     },
     endDate: {
       type: DataTypes.DATE,
-      allowNull: false,
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM('pending', 'approved', 'rejected', 'active', 'completed'),

@@ -1,243 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Grid,
-  TextField,
-  Button,
-  Switch,
-  FormControlLabel,
-  Divider,
-  Alert,
-} from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { Alert, Button, Paper, Stack, TextField, Typography } from '@mui/material';
 import { settingsService } from '../services/api';
 
-const Settings: React.FC = () => {
-  const [settings, setSettings] = useState({
-    cooperativeName: '',
-    email: '',
-    phone: '',
-    address: '',
-    currency: '',
-    interestRate: 0,
-    minimumSavings: 0,
-    enableNotifications: false,
-    enableAutoApproval: false,
-    enableTwoFactor: false,
-  });
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{
-    type: 'success' | 'error';
-    text: string;
-  } | null>(null);
+const fields = [
+  { name: 'cooperativeName', label: 'Cooperative name' },
+  { name: 'email', label: 'Contact email', type: 'email' },
+  { name: 'phone', label: 'Contact phone', type: 'tel' },
+  { name: 'address', label: 'Address' }
+] as const;
+
+export default function Settings() {
+  const [settings, setSettings] = useState<Record<string, string> | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    settingsService.get()
-      .then(data => {
-        setSettings({
-          cooperativeName: data.cooperativeName || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          address: data.address || '',
-          currency: data.currency || '',
-          interestRate: data.interestRate || 0,
-          minimumSavings: data.minimumSavings || 0,
-          enableNotifications: !!data.enableNotifications,
-          enableAutoApproval: !!data.enableAutoApproval,
-          enableTwoFactor: !!data.enableTwoFactor,
-        });
-        setLoading(false);
-      })
-      .catch(() => {
-        setMessage({ type: 'error', text: 'Failed to load settings' });
-        setLoading(false);
-      });
+    settingsService.get().then(setSettings).catch(() => setNotice({ text: 'Could not load settings.', error: true }));
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, checked } = e.target;
-    setSettings((prev) => ({
-      ...prev,
-      [name]: e.target.type === 'checkbox' ? checked : value,
-    }));
-  };
-
-  const handleSave = async () => {
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
     try {
-      await settingsService.update(settings);
-      setMessage({
-        type: 'success',
-        text: 'Settings saved successfully',
-      });
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: 'Failed to save settings',
-      });
+      const response = await settingsService.update(settings);
+      setSettings(response.data);
+      setNotice({ text: 'Settings saved.', error: false });
+    } catch (error: any) {
+      setNotice({ text: error.response?.data?.message || 'Could not save settings.', error: true });
+    } finally {
+      setSaving(false);
     }
-    setTimeout(() => setMessage(null), 3000);
   };
-
-  if (loading) return <div>Loading...</div>;
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
-
-      {message && (
-        <Alert severity={message.type} sx={{ mb: 3 }}>
-          {message.text}
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              General Settings
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Cooperative Name"
-                  name="cooperativeName"
-                  value={settings.cooperativeName}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={settings.email}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Phone"
-                  name="phone"
-                  value={settings.phone}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Address"
-                  name="address"
-                  multiline
-                  rows={2}
-                  value={settings.address}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Financial Settings
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Currency"
-                  name="currency"
-                  value={settings.currency}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Interest Rate (%)"
-                  name="interestRate"
-                  type="number"
-                  value={settings.interestRate}
-                  onChange={handleChange}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Minimum Savings"
-                  name="minimumSavings"
-                  type="number"
-                  value={settings.minimumSavings}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              System Settings
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.enableNotifications}
-                      onChange={handleChange}
-                      name="enableNotifications"
-                    />
-                  }
-                  label="Enable Email Notifications"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.enableAutoApproval}
-                      onChange={handleChange}
-                      name="enableAutoApproval"
-                    />
-                  }
-                  label="Enable Auto-approval for Small Loans"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.enableTwoFactor}
-                      onChange={handleChange}
-                      name="enableTwoFactor"
-                    />
-                  }
-                  label="Enable Two-Factor Authentication"
-                />
-              </Grid>
-            </Grid>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" onClick={handleSave}>
-              Save Settings
-            </Button>
-          </Box>
-        </Grid>
-      </Grid>
-    </Box>
+    <Stack spacing={2} maxWidth={640}>
+      <Typography variant="h4" component="h1">Cooperative settings</Typography>
+      {notice && <Alert severity={notice.error ? 'error' : 'success'}>{notice.text}</Alert>}
+      {settings && <Paper sx={{ p: 3 }}>
+        <Stack component="form" spacing={2} onSubmit={save}>
+          {fields.map(field => <TextField key={field.name} label={field.label}
+            type={'type' in field ? field.type : 'text'} value={settings[field.name]}
+            required={field.name === 'cooperativeName'}
+            onChange={event => setSettings({ ...settings, [field.name]: event.target.value })} />)}
+          <TextField label="Currency" value={settings.currency} InputProps={{ readOnly: true }} />
+          <Button type="submit" variant="contained" disabled={saving}>Save settings</Button>
+        </Stack>
+      </Paper>}
+    </Stack>
   );
-};
-
-export default Settings; 
+}

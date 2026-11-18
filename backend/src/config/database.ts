@@ -1,49 +1,27 @@
-import { Sequelize } from 'sequelize';
-import dotenv from 'dotenv';
+import 'dotenv/config';
+import { Sequelize, Options } from 'sequelize';
 
-dotenv.config();
-
-// Use Neon connection with proper SSL configuration
-const sequelize = new Sequelize({
+const options: Options = {
   dialect: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'e_cooperative',
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'your_password',
-  logging: process.env.NODE_ENV === 'development' ? console.log : false,
-  dialectOptions: {
+  logging: false,
+  dialectOptions: process.env.DB_SSL === 'true' ? {
     ssl: {
-      require: true,
-      rejectUnauthorized: false,
-      sslmode: 'require'
+      rejectUnauthorized: true,
+      ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {})
     }
-  },
-  ssl: true,
-  native: false,
-  pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
-  },
-});
-
-export const testConnection = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('Database connection has been established successfully.');
-  } catch (error) {
-    console.error('Unable to connect to the database:', error);
-  }
+  } : {},
+  pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
 };
+
+const sequelize = process.env.DATABASE_URL
+  ? new Sequelize(process.env.DATABASE_URL, options)
+  : new Sequelize({
+    ...options,
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 5432),
+    database: process.env.DB_NAME || 'e_cooperative',
+    username: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD
+  });
 
 export default sequelize;
-
-export const smtpConfig = {
-  host: process.env.SMTP_HOST || 'smtp.yourprovider.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  user: process.env.SMTP_USER || 'your_smtp_user',
-  pass: process.env.SMTP_PASS || 'your_smtp_password',
-  from: process.env.SMTP_FROM || 'E-Cooperative <no-reply@ecooperative.com>',
-};

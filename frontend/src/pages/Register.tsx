@@ -17,6 +17,7 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
   const { register, error } = useAuth();
   const [formData, setFormData] = useState({
+    cooperativeName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -33,7 +34,7 @@ const Register: React.FC = () => {
   const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | ''>('');
 
   const passwordRequirements = [
-    { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
+    { label: 'At least 12 characters', test: (pw: string) => pw.length >= 12 },
     { label: 'One uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
     { label: 'One lowercase letter', test: (pw: string) => /[a-z]/.test(pw) },
     { label: 'One number', test: (pw: string) => /[0-9]/.test(pw) },
@@ -49,7 +50,7 @@ const Register: React.FC = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked } = e.target;
     if (name === 'password') {
       setPasswordStrength(getPasswordStrength(value));
       setPasswordError('');
@@ -106,13 +107,13 @@ const Register: React.FC = () => {
     }
     try {
       const result = await register(formData);
-      // Show success message and redirect to login
-      navigate('/login', { 
-        state: { 
-          message: 'Registration successful! Please check your email to verify your account before logging in.',
+      navigate('/verify-account', {
+        state: {
           email: formData.email,
-          registrationSuccess: true
-        } 
+          message: result.delivered
+            ? 'Check your email for a verification link.'
+            : 'Your account was created. Use Resend verification email to try delivery again.'
+        }
       });
     } catch (err) {
       // Error is handled by the auth context
@@ -151,6 +152,10 @@ const Register: React.FC = () => {
           )}
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3, width: '100%' }} aria-label="Registration form">
             <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField required fullWidth label="Cooperative name" name="cooperativeName"
+                  value={formData.cooperativeName} onChange={handleChange} />
+              </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
                   required

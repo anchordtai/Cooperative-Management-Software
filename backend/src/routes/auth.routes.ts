@@ -1,23 +1,30 @@
-import express from 'express';
-import { register, login, logout, refreshToken, getMe, verify2FA, verifyEmail, verifyPhone, resendEmail, resendSMS, forgotPassword, resetPassword } from '../controllers/auth.controller';
+import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import {
+  register, acceptInvitation, login, verify2FA, verifyEmail, resendEmail, forgotPassword,
+  resetPassword, logout, refreshToken, getMe
+} from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
 
-const router = express.Router();
+const router = Router();
+const limit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Try again later.' }
+});
 
-// Public routes
-router.post('/register', register);
-router.post('/login', login);
-router.post('/verify-2fa', verify2FA);
-router.get('/verify-email', verifyEmail);
-router.post('/verify-phone', verifyPhone);
-router.post('/resend-email', resendEmail);
-router.post('/resend-sms', resendSMS);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
-
-// Protected routes
+router.post('/register', limit, register);
+router.post('/accept-invitation', limit, acceptInvitation);
+router.post('/login', limit, login);
+router.post('/verify-2fa', limit, verify2FA);
+router.post('/verify-email', limit, verifyEmail);
+router.post('/resend-email', limit, resendEmail);
+router.post('/forgot-password', limit, forgotPassword);
+router.post('/reset-password', limit, resetPassword);
 router.post('/logout', logout);
 router.post('/refresh-token', refreshToken);
 router.get('/me', authenticate, getMe);
 
-export default router; 
+export default router;

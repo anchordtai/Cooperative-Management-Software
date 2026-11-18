@@ -1,24 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
+import Cooperative from '../models/Cooperative';
+import { AppError } from '../middleware/errorHandler';
 
-// For now, we'll use a simple in-memory settings object
-// In a real application, you'd want a Settings model/table
-let appSettings = {
-  id: 1,
-  cooperativeName: 'E-Cooperative Management System',
-  email: 'admin@cooperative.com',
-  phone: '+1234567890',
-  address: '123 Cooperative Street',
-  currency: 'USD',
-  interestRate: 5.0,
-  minimumSavings: 100.0,
-  enableNotifications: true,
-  enableAutoApproval: false,
-  enableTwoFactor: true,
-};
+const defaults = { email: '', phone: '', address: '', currency: 'NGN' };
 
-export const getSettings = async (_req: Request, res: Response, next: NextFunction) => {
+export const getSettings = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    res.json(appSettings);
+    const cooperative = await Cooperative.findByPk(req.user!.cooperativeId);
+    if (!cooperative) throw new AppError('Cooperative not found', 404);
+    res.json({ ...defaults, ...cooperative.settings, cooperativeName: cooperative.name });
   } catch (error) {
     next(error);
   }
@@ -26,35 +16,17 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
 
 export const updateSettings = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const {
-      cooperativeName,
-      email,
-      phone,
-      address,
-      currency,
-      interestRate,
-      minimumSavings,
-      enableNotifications,
-      enableAutoApproval,
-      enableTwoFactor,
-    } = req.body;
-    
-    // Update the settings object
-    appSettings = {
-      ...appSettings,
-      cooperativeName: cooperativeName || appSettings.cooperativeName,
-      email: email || appSettings.email,
-      phone: phone || appSettings.phone,
-      address: address || appSettings.address,
-      currency: currency || appSettings.currency,
-      interestRate: interestRate || appSettings.interestRate,
-      minimumSavings: minimumSavings || appSettings.minimumSavings,
-      enableNotifications: enableNotifications !== undefined ? enableNotifications : appSettings.enableNotifications,
-      enableAutoApproval: enableAutoApproval !== undefined ? enableAutoApproval : appSettings.enableAutoApproval,
-      enableTwoFactor: enableTwoFactor !== undefined ? enableTwoFactor : appSettings.enableTwoFactor,
-    };
-    
-    res.json({ message: 'Settings updated successfully', data: appSettings });
+    const { cooperativeName, email, phone, address } = req.body;
+    if (typeof cooperativeName !== 'string' || !cooperativeName.trim() || cooperativeName.length > 160 ||
+      ![email, phone, address].every(value => typeof value === 'string' && value.length <= 500)) {
+      throw new AppError('Enter valid cooperative contact details', 400);
+    }
+    const cooperative = await Cooperative.findByPk(req.user!.cooperativeId);
+    if (!cooperative) throw new AppError('Cooperative not found', 404);
+    await cooperative.update({
+      name: cooperativeName.trim(), settings: { ...cooperative.settings, email, phone, address }
+    });
+    res.json({ message: 'Settings updated', data: { ...defaults, ...cooperative.settings, cooperativeName: cooperative.name } });
   } catch (error) {
     next(error);
   }

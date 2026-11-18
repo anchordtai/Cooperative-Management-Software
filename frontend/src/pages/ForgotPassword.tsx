@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Alert, Paper, Link } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 const ForgotPassword: React.FC = () => {
