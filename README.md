@@ -53,6 +53,6 @@ Run migrations as a release step. Older provider guides in the repository descri
 
 ### Vercel
 
-Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site URL. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. Keep preview environments on an isolated database.
+Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site URL. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. When the database is provisioned through Vercel, you can set `ECOOPERATIVE_MIGRATE_ON_DEPLOY=1` for a trusted production build, then reset it to `0` after the build succeeds. The build uses `DATABASE_URL_UNPOOLED` for migrations when available. Preview builds skip this step. Keep preview environments on an isolated database.
 
 `/api/health` returns HTTP 503 until the database is configured and reachable.
