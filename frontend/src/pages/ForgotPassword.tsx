@@ -1,9 +1,11 @@
 import { AuthBranding, ProductAttribution } from '../components/AuthBranding';
 import React, { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Alert, Paper, Link } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 const ForgotPassword: React.FC = () => {
+  const platform = useLocation().pathname === '/platform/forgot-password';
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,7 @@ const ForgotPassword: React.FC = () => {
     setError(null);
     setMessage(null);
     try {
-      const res = await api.post('/auth/forgot-password', { email });
+      const res = await api.post('/auth/forgot-password', { email, platform });
       setMessage(res.data.message || 'If that email exists, a reset link has been sent.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to send reset link');
@@ -31,7 +33,7 @@ const ForgotPassword: React.FC = () => {
         <Paper variant="outlined" sx={{ padding: { xs: 2.5, sm: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
           <AuthBranding />
           <Typography component="h1" variant="h5" mb={2}>
-            Forgot Password
+            {platform ? 'Set or reset platform owner password' : 'Forgot Password'}
           </Typography>
           {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -58,7 +60,7 @@ const ForgotPassword: React.FC = () => {
             </Button>
           </Box>
           <Box sx={{ textAlign: 'center' }}>
-            <Link href="/login" variant="body2">
+            <Link href={platform ? '/platform/login' : '/login'} variant="body2">
               Back to Login
             </Link>
           </Box>

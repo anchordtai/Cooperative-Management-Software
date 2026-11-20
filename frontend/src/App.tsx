@@ -37,7 +37,7 @@ const PlatformOwner = lazy(() => import('./pages/PlatformOwner'));
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode; roles?: string[]; permission?: string }) => {
   const { user, loading, can } = useAuth();
   if (loading) return <LoadingSpinner message="Checking authentication…" />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to={roles?.includes('platform_owner') ? '/platform/login' : '/login'} replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   if (permission && !can(permission)) return <Navigate to="/app" replace />;
   return <>{children}</>;
@@ -64,6 +64,9 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+        <Route path="/platform/login" element={user?.role === 'platform_owner' ? <Navigate to="/platform" replace /> : <Login />} />
+        <Route path="/platform/forgot-password" element={<ForgotPassword />} />
+        <Route path="/platform/reset-password" element={<ResetPassword />} />
         <Route path="/platform" element={<ProtectedRoute roles={['platform_owner']}><PlatformOwner /></ProtectedRoute>} />
         <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><UserDashboard /></ProtectedRoute>} />
         <Route path="/about" element={<About />} />

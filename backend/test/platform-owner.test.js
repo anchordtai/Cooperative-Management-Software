@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { randomBytes, randomUUID } = require('node:crypto');
+const { randomBytes } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const { test } = require('node:test');
@@ -11,12 +11,6 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   process.env = { ...original, PLATFORM_OWNER_EMAIL: email, JWT_SECRET: randomBytes(32).toString('hex'),
     SMTP_HOST: 'smtp.example.test', SMTP_FROM: 'sender@example.test', SMTP_USER: 'test', SMTP_PASS: 'test' };
   t.after(() => { process.env = original; });
-
-  for (const expected of ['Platform owner provisioned', 'Platform owner already provisioned']) {
-    const run = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'owner:provision'], { env: process.env, encoding: 'utf8' });
-    assert.equal(run.status, 0, run.stderr);
-    assert.match(run.stdout, new RegExp(expected));
-  }
 
   const mail = [];
   t.mock.method(require('nodemailer'), 'createTransport', () => ({
@@ -52,28 +46,40 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   const owner = client();
   const tenant = client();
   const cooperative = await Cooperative.create({ name: 'Owner test cooperative' });
-  const tenantEmail = randomUUID() + '@example.test';
+  const tenantEmail = email;
   const password = 'Example password 19!';
   await User.create({ email: tenantEmail, password, role: 'admin', cooperativeId: cooperative.id,
     phone: '08000000000', isEmailVerified: true });
+  for (const expected of ['Platform owner provisioned', 'Platform owner already provisioned']) {
+    const run = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'owner:provision'], { env: process.env, encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, new RegExp(expected));
+  }
+
   await tenant('/auth/login', 'POST', { email: tenantEmail, password });
   await tenant('/platform/tenants', 'GET', undefined, 403);
   await client()('/platform/tenants', 'GET', undefined, 401);
 
-  await owner('/auth/forgot-password', 'POST', { email });
+  await owner('/auth/forgot-password', 'POST', { email, platform: true });
   assert.equal(mail.at(-1).to, email);
   const token = mail.at(-1).text.match(/#token=([0-9a-f]{64})/)[1];
-  await owner('/auth/reset-password', 'POST', { password, token });
   await owner('/auth/reset-password', 'POST', { password, token }, 400);
+  const ownerPassword = 'My platform password 15!';
+  await owner('/auth/reset-password', 'POST', { password: ownerPassword, token, platform: true });
+  await owner('/auth/reset-password', 'POST', { password: ownerPassword, token, platform: true }, 400);
+  await owner('/auth/login', 'POST', { email, password: ownerPassword }, 401);
+  await owner('/auth/login', 'POST', { email, password, platform: true }, 401);
 
-  const login = await owner('/auth/login', 'POST', { email, password });
+  const login = await owner('/auth/login', 'POST', { email, password: ownerPassword, platform: true });
   assert.equal(login.require2FA, true);
   await owner('/platform/tenants', 'GET', undefined, 401);
   assert.equal(mail.at(-1).to, email);
   const code = mail.at(-1).text.match(/^\d{6}/)[0];
-  await owner('/auth/verify-2fa', 'POST', { email, code });
+  await owner('/auth/verify-2fa', 'POST', { email, code }, 400);
+  await owner('/auth/verify-2fa', 'POST', { email, code, platform: true });
   const account = (await owner('/auth/me')).user;
   assert.equal(account.role, 'platform_owner');
+  assert.equal(account.email, email);
   assert.equal(account.cooperativeId, null);
   await owner('/members', 'GET', undefined, 403);
   await owner('/transactions', 'GET', undefined, 403);

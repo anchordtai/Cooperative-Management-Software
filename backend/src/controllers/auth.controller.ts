@@ -1,5 +1,5 @@
 import { brand } from '../config/brand';
-import { isConfiguredOwner, ownerEmail } from '../config/platform';
+import { internalOwnerDomain, isConfiguredOwner, ownerAccountId, ownerEmail, ownerRole } from '../config/platform';
 import { randomInt } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
@@ -16,8 +16,14 @@ const oneHour = 60 * 60 * 1000;
 const frontend = () => process.env.FRONTEND_URL || 'http://localhost:3000';
 const normalizedEmail = (value: unknown) => typeof value === 'string' ? value.trim().toLowerCase() : '';
 
+const accountLookup = (email: unknown, platform: boolean) => {
+  const normalized = normalizedEmail(email);
+  if (platform) return normalized && normalized === ownerEmail() ? ownerAccountId(normalized) : '';
+  return normalized.endsWith(internalOwnerDomain) ? '' : normalized;
+};
+
 const serialize = (user: User) => ({
-  id: user.id, email: user.email, role: user.role, cooperativeId: user.cooperativeId,
+  id: user.id, email: user.role === ownerRole ? ownerEmail() : user.email, role: user.role, cooperativeId: user.cooperativeId,
   firstName: user.firstName, lastName: user.lastName, phone: user.phone, permissions: user.permissions
 });
 
@@ -71,7 +77,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       throw new AppError('Registration is temporarily unavailable because verification email is offline. Please try again later.', 503);
     }
 
-    if (email === ownerEmail()) throw new AppError('This email address is already registered', 409);
+    if (email.endsWith(internalOwnerDomain)) throw new AppError('Enter a valid email address.', 400);
 
     const user = await sequelize.transaction(async transaction => {
       const cooperative = await Cooperative.create({ name: cooperativeName.trim() }, { transaction });
@@ -149,9 +155,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     if (typeof password !== 'string' || Buffer.byteLength(password) > 72) {
       throw new AppError('Invalid credentials', 401);
     }
-    const user = await User.findOne({ where: { email: normalizedEmail(req.body.email) } });
+    const platform = req.body.platform === true;
+    const user = await User.findOne({ where: { email: accountLookup(req.body.email, platform) } });
     const comparableHash = user?.password || '$2a$10$ugDlaveH8binRfnB4fVmRujs1xzAqAnqlQ78eDm71FGYgzyWHvU42';
-    if (!await bcrypt.compare(password, comparableHash) || !user || (!user.cooperativeId && !isConfiguredOwner(user))) {
+    if (!await bcrypt.compare(password, comparableHash) || !user || (platform ? !isConfiguredOwner(user) : !user.cooperativeId || user.role === ownerRole)) {
       throw new AppError('Invalid credentials', 401);
     }
     if (!user.isEmailVerified) {
@@ -165,7 +172,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       const challenge = newToken();
       res.cookie('challenge', challenge, { ...cookieOptions, path: '/api/auth', maxAge: 10 * 60 * 1000 });
       await user.update({ twoFACode: tokenHash(challenge + code), twoFACodeExpires: new Date(Date.now() + 10 * 60 * 1000) });
-      if (!await deliver(user.email, `Your ${brand.name} verification code`, code)) {
+      if (!await deliver(platform ? ownerEmail() : user.email, `Your ${brand.name} verification code`, code)) {
         throw new AppError('Verification email could not be delivered', 503);
       }
       res.json({ require2FA: true, twoFAMethod: 'email', message: 'Check your email for the verification code.' });
@@ -188,7 +195,7 @@ export const verify2FA = async (req: Request, res: Response, next: NextFunction)
     const user = await sequelize.transaction(async transaction => {
       const account = await User.findOne({
         where: {
-          email: normalizedEmail(req.body.email), twoFAEnabled: true, twoFACode: tokenHash(challenge + code),
+          email: accountLookup(req.body.email, req.body.platform === true), twoFAEnabled: true, twoFACode: tokenHash(challenge + code),
           twoFACodeExpires: { [Op.gt]: new Date() }
         },
         lock: transaction.LOCK.UPDATE, transaction
@@ -248,11 +255,13 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
 
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await User.findOne({ where: { email: normalizedEmail(req.body.email) } });
-    if (user && ((user.cooperativeId && user.isEmailVerified) || isConfiguredOwner(user))) {
+    const platform = req.body.platform === true;
+    const user = await User.findOne({ where: { email: accountLookup(req.body.email, platform) } });
+    if (user && (platform ? isConfiguredOwner(user) : user.cooperativeId && user.isEmailVerified)) {
       const token = newToken();
       await user.update({ passwordResetToken: tokenHash(token), passwordResetExpires: new Date(Date.now() + oneHour) });
-      await deliver(user.email, `Reset your ${brand.name} password`, `${frontend()}/reset-password#token=${token}`);
+      const path = platform ? '/platform/reset-password' : '/reset-password';
+      await deliver(platform ? ownerEmail() : user.email, `Reset your ${brand.name} ${platform ? 'platform owner ' : ''}password`, `${frontend()}${path}#token=${token}`);
     }
     res.json({ message: 'If the account is eligible, check your email for a reset link.' });
   } catch (error) {
@@ -271,7 +280,10 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
         where: { passwordResetToken: tokenHash(token), passwordResetExpires: { [Op.gt]: new Date() } },
         lock: transaction.LOCK.UPDATE, transaction
       });
-      if (!user) throw new AppError('Invalid or expired reset link', 400);
+      const platform = req.body.platform === true;
+      if (!user || (platform ? !isConfiguredOwner(user) : user.role === ownerRole)) {
+        throw new AppError('Invalid or expired reset link', 400);
+      }
       await user.update({
         ...(isConfiguredOwner(user) ? { isEmailVerified: true } : {}),
         password, passwordResetToken: null, passwordResetExpires: null, twoFACode: null, twoFACodeExpires: null

@@ -34,11 +34,12 @@ api.interceptors.response.use(undefined, async (error) => {
 export const authService = {
   login: async (
     email: string,
-    password: string
+    password: string,
+    platform = false
   ) => {
     const response = await api.post(
       "/auth/login",
-      { email, password }
+      { email, password, platform }
     );
     return response.data;
   },
@@ -49,8 +50,8 @@ export const authService = {
   logout: async () => {
     await api.post("/auth/logout");
   },
-  verify2FA: async (email: string, code: string) => {
-    const response = await api.post("/auth/verify-2fa", { email, code });
+  verify2FA: async (email: string, code: string, platform = false) => {
+    const response = await api.post("/auth/verify-2fa", { email, code, platform });
     return response.data;
   },
   getMe: async () => {

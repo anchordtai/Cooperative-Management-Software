@@ -6,6 +6,7 @@ import api from '../services/api';
 
 const ResetPassword: React.FC = () => {
   const location = useLocation();
+  const platform = location.pathname === '/platform/reset-password';
   const query = new URLSearchParams(location.search);
   const token = new URLSearchParams(location.hash.slice(1)).get('token') || query.get('token') || '';
   const [password, setPassword] = useState('');
@@ -25,7 +26,7 @@ const ResetPassword: React.FC = () => {
       return;
     }
     try {
-      const res = await api.post('/auth/reset-password', { token, password });
+      const res = await api.post('/auth/reset-password', { token, password, platform });
       setMessage(res.data.message || 'Password reset successful. You can now log in.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to reset password');
@@ -78,7 +79,7 @@ const ResetPassword: React.FC = () => {
             </Button>
           </Box>
           <Box sx={{ textAlign: 'center' }}>
-            <Link href="/login" variant="body2">
+            <Link href={platform ? '/platform/login' : '/login'} variant="body2">
               Back to Login
             </Link>
           </Box>

@@ -16,11 +16,11 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<any>;
+  login: (email: string, password: string, platform?: boolean) => Promise<any>;
   register: (userData: any) => Promise<{ delivered: boolean }>;
   logout: () => Promise<void>;
   require2FA: boolean;
-  verify2FA: (email: string, code: string) => Promise<void>;
+  verify2FA: (email: string, code: string, platform?: boolean) => Promise<void>;
   pending2FAEmail: string;
   can: (permission: string) => boolean;
 }
@@ -46,12 +46,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, platform?: boolean) => {
     try {
       setError(null);
       setRequire2FA(false);
       setPending2FAEmail('');
-      const response = await authService.login(email, password);
+      const response = await authService.login(email, password, platform);
       if (response.require2FA) {
         setRequire2FA(true);
         setPending2FAEmail(email);
@@ -79,10 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const verify2FA = async (email: string, code: string) => {
+  const verify2FA = async (email: string, code: string, platform?: boolean) => {
     try {
       setError(null);
-      await authService.verify2FA(email, code);
+      await authService.verify2FA(email, code, platform);
       // Fetch user after 2FA
       const me = await authService.getMe();
       setUser(me.user);

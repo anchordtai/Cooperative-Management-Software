@@ -20,6 +20,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const platform = location.pathname === '/platform/login';
   const { login, verify2FA } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -59,7 +60,7 @@ const Login: React.FC = () => {
     setLocalError('');
     try {
       setLoading(true);
-      const result = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password, platform);
       
       if (result?.require2FA) {
         setShow2FA(true);
@@ -91,7 +92,7 @@ const Login: React.FC = () => {
     setLocalError('');
     try {
       setLoading(true);
-      await verify2FA(pendingEmail, code);
+      await verify2FA(pendingEmail, code, platform);
       navigate('/');
     } catch (err: any) {
       setLocalError(err?.response?.data?.message || err?.message || '2FA verification failed');
@@ -106,10 +107,10 @@ const Login: React.FC = () => {
         <Paper variant="outlined" sx={{ padding: { xs: 2.5, sm: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
           <AuthBranding />
           <Typography component="h1" variant="h5">
-            Welcome to Co-opSphere
+            {platform ? 'Platform owner sign-in' : 'Welcome to Co-opSphere'}
           </Typography>
           <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
-            Manage your cooperative, members, savings, loans and financial operations in one workspace.
+            {platform ? 'Sign in to the Co-opSphere platform console.' : 'Manage your cooperative, members, savings, loans and financial operations in one workspace.'}
           </Typography>
           {successMessage && (
             <Alert severity="success" sx={{ mt: 2, width: '100%' }}>
@@ -179,11 +180,11 @@ const Login: React.FC = () => {
                 {loading ? 'Signing in...' : 'Sign In'}
             </Button>
             <Box sx={{ textAlign: 'center' }}>
-              <Link component={RouterLink} to="/register" variant="body2">
+              {!platform && <><Link component={RouterLink} to="/register" variant="body2">
                 {"Don't have an account? Sign Up"}
               </Link>
-                <br />
-                <Link component={RouterLink} to="/forgot-password" variant="body2">
+                <br /></>}
+                <Link component={RouterLink} to={platform ? '/platform/forgot-password' : '/forgot-password'} variant="body2">
                   Forgot Password?
                 </Link>
               </Box>
