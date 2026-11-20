@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Sequelize, Options } from 'sequelize';
 import pg from 'pg';
+import { previewDatabaseUrl } from './preview-database';
 
 const options: Options = {
   dialect: 'postgres',
@@ -15,8 +16,13 @@ const options: Options = {
   pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
 };
 
-const sequelize = process.env.DATABASE_URL
-  ? new Sequelize(process.env.DATABASE_URL, options)
+const isPreview = process.env.VERCEL_ENV === 'preview';
+const databaseUrl = isPreview ? previewDatabaseUrl(process.env) : process.env.DATABASE_URL;
+export const databaseConfigured = isPreview ? Boolean(databaseUrl) : process.env.VERCEL !== '1' ||
+  Boolean(databaseUrl || (process.env.DB_HOST && process.env.DB_PASSWORD));
+
+const sequelize = databaseUrl
+  ? new Sequelize(databaseUrl, options)
   : new Sequelize({
     ...options,
     host: process.env.DB_HOST || 'localhost',

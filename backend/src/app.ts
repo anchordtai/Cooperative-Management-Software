@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { AppError, errorHandler } from './middleware/errorHandler';
-import sequelize from './config/database';
+import sequelize, { databaseConfigured } from './config/database';
 import './models';
 import authRoutes from './routes/auth.routes';
 import memberRoutes from './routes/member.routes';
@@ -31,24 +31,25 @@ const frontendOrigins = [
   ...(process.env.VERCEL === '1' ? deployedHosts.filter(Boolean).map(host => `https://${host}`) : [])
 ].map(url => new URL(url).origin);
 
-const databaseConfigured = process.env.VERCEL !== '1' ||
-  Boolean(process.env.DATABASE_URL || (process.env.DB_HOST && process.env.DB_PASSWORD));
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
 app.disable('x-powered-by');
 app.use(cors({
   origin: (origin, callback) => callback(null, Boolean(origin && frontendOrigins.includes(origin))),
   credentials: true
 }));
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  if (!databaseConfigured && req.path !== '/health') {
+    return next(new AppError('The cooperative database is not configured for this deployment', 503));
+  }
+  return next();
+});
 app.post('/api/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), paystackWebhook);
 app.post('/api/billing/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), billingWebhook('paystack'));
 app.post('/api/billing/webhooks/flutterwave', express.raw({ type: 'application/json', limit: '64kb' }), billingWebhook('flutterwave'));
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
-app.use('/api', (req, res, next) => {
-  res.set('Cache-Control', 'no-store');
-  if (!databaseConfigured && !['/health'].includes(req.path)) {
-    return next(new AppError('The cooperative database is not configured for this deployment', 503));
-  }
+app.use('/api', (req, _res, next) => {
   const origin = req.get('Origin');
   if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
     (req.get('X-ECooperative-Request') !== '1' || (origin && !frontendOrigins.includes(origin)))) {
