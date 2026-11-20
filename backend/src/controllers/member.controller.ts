@@ -1,3 +1,4 @@
+import { frontendUrl } from '../config/frontend';
 import { brand } from '../config/brand';
 import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
@@ -138,8 +139,7 @@ export const inviteMember = async (req: Request, res: Response, next: NextFuncti
     });
 
     try {
-      const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
-      await sendEmail(email, `Activate your ${brand.name} membership`, `${frontend}/verify-account#invite=${token}`);
+      await sendEmail(email, `Activate your ${brand.name} membership`, `${frontendUrl()}/verify-account#invite=${token}`);
     } catch {
       throw new AppError('Invitation delivery failed. You can retry sending the invitation.', 503);
     }

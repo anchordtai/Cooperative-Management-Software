@@ -1,4 +1,5 @@
 import { brand } from '../config/brand';
+import { frontendUrl } from '../config/frontend';
 import { randomInt } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
@@ -12,7 +13,6 @@ import { canSignIn, cookieOptions, newToken, setSessionCookies, tokenHash } from
 import { AppError } from '../middleware/errorHandler';
 
 const oneHour = 60 * 60 * 1000;
-const frontend = () => process.env.FRONTEND_URL || 'http://localhost:3000';
 const normalizedEmail = (value: unknown) => typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 const serialize = (user: User) => ({
@@ -29,7 +29,6 @@ async function deliver(email: string, subject: string, message: string) {
     await sendEmail(email, subject, message);
     return true;
   } catch {
-    console.error('Account email delivery failed');
     return false;
   }
 }
@@ -40,7 +39,7 @@ async function sendVerification(user: User) {
     emailVerificationToken: tokenHash(token),
     emailVerificationExpires: new Date(Date.now() + 24 * oneHour)
   });
-  return deliver(user.email, `Verify your ${brand.name} account`, `${frontend()}/verify-account#token=${token}`);
+  return deliver(user.email, `Verify your ${brand.name} account`, `${frontendUrl()}/verify-account#token=${token}`);
 }
 
 function issueSession(res: Response, user: User, session: Session, refresh: string) {
@@ -132,9 +131,10 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
 
 export const resendEmail = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!isEmailConfigured()) throw new AppError('Verification email is temporarily unavailable. Please try again later.', 503);
     const user = await User.findOne({ where: { email: normalizedEmail(req.body.email), isEmailVerified: false } });
     if (user?.cooperativeId && user.role === 'admin') await sendVerification(user);
-    res.json({ message: 'If verification is pending, check your email for a new link.' });
+    res.json({ message: 'If verification is pending, a new link will be sent if email delivery is available.' });
   } catch (error) {
     next(error);
   }
@@ -245,7 +245,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     if (user?.cooperativeId) {
       const token = newToken();
       await user.update({ passwordResetToken: tokenHash(token), passwordResetExpires: new Date(Date.now() + oneHour) });
-      await deliver(user.email, `Reset your ${brand.name} password`, `${frontend()}/reset-password#token=${token}`);
+      await deliver(user.email, `Reset your ${brand.name} password`, `${frontendUrl()}/reset-password#token=${token}`);
     }
     res.json({ message: 'If the account is eligible, check your email for a reset link.' });
   } catch (error) {

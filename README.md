@@ -57,6 +57,13 @@ Run migrations as a release step. Older provider guides in the repository descri
 
 ### Vercel
 
-Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site URL. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. When the database is provisioned through Vercel, you can set `ECOOPERATIVE_MIGRATE_ON_DEPLOY=1` for a trusted production build, then reset it to `0` after the build succeeds. The build uses `DATABASE_URL_UNPOOLED` for migrations when available. Preview builds skip this step. Keep preview environments on an isolated database.
+Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site origin. Account, invitation and recovery emails link to this origin. Set `FRONTEND_ALLOWED_ORIGINS` to a comma-separated list of additional trusted origins during a domain transition. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. When the database is provisioned through Vercel, you can set `ECOOPERATIVE_MIGRATE_ON_DEPLOY=1` for a trusted production build, then reset it to `0` after the build succeeds. The build uses `DATABASE_URL_UNPOOLED` for migrations when available. Preview builds skip this step. Keep preview environments on an isolated database.
 
 `/api/health` returns HTTP 503 until the database is configured and reachable.
+
+### Custom domain transition
+
+1. Add and verify the chosen hostname in the existing Vercel project.
+2. Set `FRONTEND_URL` to the new HTTPS origin and keep the current hostname in `FRONTEND_ALLOWED_ORIGINS`. Keep both hostnames pointed at the app while previously issued links are still valid.
+3. Update the site's public sharing metadata, redeploy, then verify signup, sign-in, email verification, staff and member invitations, and password recovery from the new hostname. Sessions use host-specific cookies, so users moving to a new hostname need to sign in there.
+4. A domain transition for the website can use the existing verified sending domain. Check provider activity and the Vercel function's `Email delivery failed` entry if an email fails. The application logs only a transport error category and a numeric SMTP response code.

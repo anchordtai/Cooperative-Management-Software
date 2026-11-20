@@ -20,6 +20,7 @@ export default function VerifyAccount() {
     event.preventDefault();
     setBusy(true);
     setError('');
+    setMessage('');
     try {
       const response = invitation
         ? await api.post('/auth/accept-invitation', { token: invitation, password })
@@ -52,6 +53,8 @@ export default function VerifyAccount() {
               {invitation ? 'Activate account' : verification ? 'Verify email' : 'Resend verification email'}
             </Button>
           </>}
+          {error && verification && <Link component={RouterLink} to="/verify-account"
+            onClick={() => { setError(''); setMessage(''); }}>Request a new verification link</Link>}
           <Link component={RouterLink} to="/login">Back to sign in</Link>
         </Stack>
         <ProductAttribution />

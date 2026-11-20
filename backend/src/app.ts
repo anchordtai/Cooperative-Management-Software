@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { AppError, errorHandler } from './middleware/errorHandler';
 import sequelize from './config/database';
+import { allowedFrontendOrigins } from './config/frontend';
 import './models';
 import authRoutes from './routes/auth.routes';
 import memberRoutes from './routes/member.routes';
@@ -19,18 +20,14 @@ import paymentsRoutes, { paystackWebhook } from './routes/payments.routes';
 import documentsRoutes from './routes/documents.routes';
 
 const app = express();
-const deployedHosts = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL];
-const frontendOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
-  ...(process.env.VERCEL === '1' ? deployedHosts.filter(Boolean).map(host => `https://${host}`) : [])
-].map(url => new URL(url).origin);
+const frontendOrigins = allowedFrontendOrigins();
 
 const databaseConfigured = process.env.VERCEL !== '1' ||
   Boolean(process.env.DATABASE_URL || (process.env.DB_HOST && process.env.DB_PASSWORD));
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
 app.disable('x-powered-by');
 app.use(cors({
-  origin: (origin, callback) => callback(null, Boolean(origin && frontendOrigins.includes(origin))),
+  origin: (origin, callback) => callback(null, Boolean(origin && frontendOrigins.has(origin))),
   credentials: true
 }));
 app.post('/api/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), paystackWebhook);
@@ -43,7 +40,7 @@ app.use('/api', (req, res, next) => {
   }
   const origin = req.get('Origin');
   if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
-    (req.get('X-ECooperative-Request') !== '1' || (origin && !frontendOrigins.includes(origin)))) {
+    (req.get('X-ECooperative-Request') !== '1' || (origin && !frontendOrigins.has(origin)))) {
     return next(new AppError('Request origin is not allowed', 403));
   }
   return next();

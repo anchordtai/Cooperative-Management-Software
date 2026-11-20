@@ -41,3 +41,20 @@ test('invited members set a password before their account activates', async () =
     token: 'example-invitation', password: 'A-test-password'
   });
 });
+
+test('an expired verification link lets the user request a replacement', async () => {
+  vi.mocked(api.post)
+    .mockRejectedValueOnce({ response: { data: { message: 'Invalid or expired verification link' } } })
+    .mockResolvedValueOnce({ data: { message: 'If verification is pending, a new link will be sent.' } });
+  showVerificationPage('/verify-account#token=expired-token');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
+  await screen.findByText('Invalid or expired verification link');
+  fireEvent.click(screen.getByRole('link', { name: 'Request a new verification link' }));
+  expect(screen.queryByText('Invalid or expired verification link')).toBeNull();
+
+  fireEvent.change(screen.getByRole('textbox', { name: /email/i }), { target: { value: 'pending@example.test' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }));
+  await screen.findByText('If verification is pending, a new link will be sent.');
+  expect(api.post).toHaveBeenLastCalledWith('/auth/resend-email', { email: 'pending@example.test' });
+});
