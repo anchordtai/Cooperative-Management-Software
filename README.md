@@ -31,6 +31,12 @@ Register a cooperative at `/register` and follow the verification link in the em
 - Members submit withdrawal requests. Pending requests reserve the amount. An authorised officer rejects the request or records its confirmed payout reference. The backend rechecks the available savings when recording the payout.
 - Deposits, approved withdrawals, disbursements and repayments produce paired debit and credit postings in the same database transaction. The activity report aggregates completed transactions across the full period and supports CSV export. Members can download PDF receipts and a savings activity statement for the previous 12 months.
 
+## Reconciliation
+
+Open **Reports → Reconciliation** with the `reports.read` permission. Select dates in West Africa Time to review opening and closing savings from available transaction history, deposits, payouts, loan disbursements and repayments. Download the summary or export the page of exceptions being reviewed. Each exception identifies the underlying record and includes the transfer reference where available.
+
+The period review checks transaction amounts and account directions against immutable postings. The report also checks current member savings and loan balances against recorded savings movements, loan schedules and the ledger. Current balances are shown separately from historical period values. Imported balances without matching transactions may require investigation. This report is read-only. Independent bank statements or payment-provider settlement reports are still needed to confirm external funds movement.
+
 ## Paystack test checkout
 
 Use a disposable database and an explicitly selected test cooperative. Set `PAYSTACK_SECRET_KEY` to a Paystack test key and set `PAYSTACK_TEST_COOPERATIVE_ID` to the test cooperative ID. The test deposit form then appears for its signed-in members. Configure the Paystack test dashboard to send webhooks to `/api/webhooks/paystack` on a publicly reachable staging API. Set `PAYSTACK_WEBHOOK_SECRET` if the dashboard uses a webhook signing secret.

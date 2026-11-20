@@ -4,6 +4,7 @@ import { QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import { authenticate } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
+import { reconciliationReport } from '../services/reconciliation';
 
 const router = Router();
 
@@ -40,6 +41,16 @@ router.get('/activity', authenticate, permit('reports.read'), async (req, res, n
     `, { replacements: { cooperativeId, months: Number(months) }, type: QueryTypes.SELECT });
 
     res.json({ data: entries });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/reconciliation', authenticate, permit('reports.read'), async (req, res, next) => {
+  try {
+    const { from, to, page } = req.query;
+    const report = await reconciliationReport(req.user!.cooperativeId, from, to, page);
+    res.json({ data: report });
   } catch (error) {
     next(error);
   }
