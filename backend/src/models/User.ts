@@ -68,7 +68,7 @@ User.init(
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     permissions: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
     role: {
-      type: DataTypes.ENUM('admin', 'member', 'staff'),
+      type: DataTypes.ENUM('admin', 'member', 'staff', 'platform_owner'),
       defaultValue: 'member',
     },
     emailVerificationExpires: { type: DataTypes.DATE },

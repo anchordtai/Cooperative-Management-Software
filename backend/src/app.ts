@@ -17,6 +17,7 @@ import contactRoutes from './routes/contact.routes';
 import auditRoutes from './routes/audit.routes';
 import paymentsRoutes, { paystackWebhook } from './routes/payments.routes';
 import documentsRoutes from './routes/documents.routes';
+import platformRoutes from './routes/platform.routes';
 
 const app = express();
 const deployedHosts = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL];
@@ -61,6 +62,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/platform', platformRoutes);
 
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {

@@ -1,4 +1,5 @@
 import { brand } from '../config/brand';
+import { isConfiguredOwner, ownerEmail } from '../config/platform';
 import { randomInt } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
@@ -8,7 +9,7 @@ import Cooperative from '../models/Cooperative';
 import Session from '../models/Session';
 import { User } from '../models/User';
 import { isEmailConfigured, sendEmail } from '../utils/email';
-import { canSignIn, cookieOptions, newToken, setSessionCookies, tokenHash } from '../middleware/auth';
+import { canSignIn, cookieOptions, newToken, setSessionCookies, sessionAccount, tokenHash } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 
 const oneHour = 60 * 60 * 1000;
@@ -69,6 +70,8 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     if (process.env.NODE_ENV === 'production' && !isEmailConfigured()) {
       throw new AppError('Registration is temporarily unavailable because verification email is offline. Please try again later.', 503);
     }
+
+    if (email === ownerEmail()) throw new AppError('This email address is already registered', 409);
 
     const user = await sequelize.transaction(async transaction => {
       const cooperative = await Cooperative.create({ name: cooperativeName.trim() }, { transaction });
@@ -148,7 +151,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
     const user = await User.findOne({ where: { email: normalizedEmail(req.body.email) } });
     const comparableHash = user?.password || '$2a$10$ugDlaveH8binRfnB4fVmRujs1xzAqAnqlQ78eDm71FGYgzyWHvU42';
-    if (!await bcrypt.compare(password, comparableHash) || !user || !user.cooperativeId) {
+    if (!await bcrypt.compare(password, comparableHash) || !user || (!user.cooperativeId && !isConfiguredOwner(user))) {
       throw new AppError('Invalid credentials', 401);
     }
     if (!user.isEmailVerified) {
@@ -235,14 +238,18 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-export const getMe = (req: Request, res: Response) => {
-  res.json({ user: serialize(req.user!) });
+export const getMe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ user: serialize(await sessionAccount(req)) });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await User.findOne({ where: { email: normalizedEmail(req.body.email), isEmailVerified: true } });
-    if (user?.cooperativeId) {
+    const user = await User.findOne({ where: { email: normalizedEmail(req.body.email) } });
+    if (user && ((user.cooperativeId && user.isEmailVerified) || isConfiguredOwner(user))) {
       const token = newToken();
       await user.update({ passwordResetToken: tokenHash(token), passwordResetExpires: new Date(Date.now() + oneHour) });
       await deliver(user.email, `Reset your ${brand.name} password`, `${frontend()}/reset-password#token=${token}`);
@@ -266,6 +273,7 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
       });
       if (!user) throw new AppError('Invalid or expired reset link', 400);
       await user.update({
+        ...(isConfiguredOwner(user) ? { isEmailVerified: true } : {}),
         password, passwordResetToken: null, passwordResetExpires: null, twoFACode: null, twoFACodeExpires: null
       }, { transaction });
       await Session.destroy({ where: { userId: user.id }, transaction });

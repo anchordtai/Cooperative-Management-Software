@@ -131,8 +131,8 @@ async function migrate() {
     }
 
     const [payments] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '004_test_payments'`);
-    if (payments.length > 0) return;
-    await run(`
+    if (payments.length === 0) {
+      await run(`
       CREATE TABLE "PaymentIntents" (
         reference varchar(80) PRIMARY KEY,
         "cooperativeId" uuid NOT NULL,
@@ -151,7 +151,27 @@ async function migrate() {
       );
       CREATE INDEX payment_intent_member_history ON "PaymentIntents" ("cooperativeId", "memberId", "createdAt");
       INSERT INTO "SchemaMigrations" (version) VALUES ('004_test_payments');
-    `);
+      `);
+    }
+
+    const [platform] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '005_platform_owner'`);
+    if (platform.length === 0) {
+      await run(`
+        ALTER TYPE "enum_Users_role" ADD VALUE IF NOT EXISTS 'platform_owner';
+        ALTER TABLE "Cooperatives" ADD COLUMN IF NOT EXISTS "suspendedAt" timestamptz;
+        CREATE TABLE "PlatformAuditEvents" (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          "actorId" uuid NOT NULL REFERENCES "Users"(id),
+          "cooperativeId" uuid NOT NULL REFERENCES "Cooperatives"(id),
+          action text NOT NULL CHECK (action IN ('tenant.suspended', 'tenant.reactivated')),
+          "createdAt" timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE TRIGGER immutable_platform_audit
+          BEFORE UPDATE OR DELETE ON "PlatformAuditEvents"
+          FOR EACH ROW EXECUTE FUNCTION reject_financial_posting_change();
+        INSERT INTO "SchemaMigrations" (version) VALUES ('005_platform_owner');
+      `);
+    }
   });
 }
 

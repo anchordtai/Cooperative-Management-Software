@@ -60,3 +60,9 @@ Run migrations as a release step. Older provider guides in the repository descri
 Use the repository root as the project root. The root `vercel.json` builds the Vite frontend and routes the same-origin `/api` to the Express function. Set `FRONTEND_URL` to the canonical HTTPS site URL. Configure PostgreSQL with `DATABASE_URL` and `DB_SSL=true`, set an independent `JWT_SECRET` for each environment, and configure authenticated SMTP before opening registration. Run migrations against the intended database as a separate release step. When the database is provisioned through Vercel, you can set `ECOOPERATIVE_MIGRATE_ON_DEPLOY=1` for a trusted production build, then reset it to `0` after the build succeeds. The build uses `DATABASE_URL_UNPOOLED` for migrations when available. Preview builds skip this step. Keep preview environments on an isolated database.
 
 `/api/health` returns HTTP 503 until the database is configured and reachable.
+
+## Platform ownership
+
+The owner uses a separate account with no cooperative membership and completes a password and email code at sign-in. The platform console lists cooperative names, status and member counts, and records tenant suspension and reactivation in a separate history. Suspension blocks tenant sign-in and revokes their sessions. Tenant financial and member endpoints require a separate scoped account.
+
+To provision the single owner, set `PLATFORM_OWNER_EMAIL` to the confirmed mailbox, run the database migrations, then run `npm run owner:provision --prefix backend`. Provisioning refuses to overwrite an existing account or replace a different owner. On Vercel, explicitly set `PLATFORM_OWNER_BOOTSTRAP=1` for the trusted Production rollout to run migration and provisioning together. Set that flag back to `0` after provisioning and keep `PLATFORM_OWNER_EMAIL` configured. The owner requests a setup link using the password-reset page and chooses their password in Co-opSphere.

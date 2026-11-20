@@ -4,7 +4,6 @@ import {
   register, acceptInvitation, login, verify2FA, verifyEmail, resendEmail, forgotPassword,
   resetPassword, logout, refreshToken, getMe
 } from '../controllers/auth.controller';
-import { authenticate } from '../middleware/auth';
 
 const router = Router();
 const limit = rateLimit({
@@ -25,6 +24,6 @@ router.post('/forgot-password', limit, forgotPassword);
 router.post('/reset-password', limit, resetPassword);
 router.post('/logout', logout);
 router.post('/refresh-token', refreshToken);
-router.get('/me', authenticate, getMe);
+router.get('/me', getMe);
 
 export default router;

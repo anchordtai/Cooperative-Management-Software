@@ -20,7 +20,7 @@ const pageTitles: Record<string, string> = {
   '/about': 'About', '/faq': 'FAQ', '/contact': 'Contact', '/login': 'Sign in', '/register': 'Register',
   '/forgot-password': 'Forgot password', '/reset-password': 'Reset password', '/verify-account': 'Verify account',
   '/terms': 'Terms and Conditions', '/privacy': 'Privacy Policy', '/intellectual-property': 'Intellectual Property',
-  '/acceptable-use': 'Acceptable Use', '/app': 'Cooperative Workspace', '/user-dashboard': 'Member Portal'
+  '/acceptable-use': 'Acceptable Use', '/app': 'Cooperative Workspace', '/user-dashboard': 'Member Portal', '/platform': 'Platform Administration'
 };
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -32,6 +32,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Staff = lazy(() => import('./pages/Staff'));
 const Audit = lazy(() => import('./pages/Audit'));
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
+const PlatformOwner = lazy(() => import('./pages/PlatformOwner'));
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode; roles?: string[]; permission?: string }) => {
   const { user, loading, can } = useAuth();
@@ -56,13 +57,14 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingSpinner message="Loading page…" />}>
       <Routes>
-        <Route path="/" element={user ? <Navigate replace to={user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
+        <Route path="/" element={user ? <Navigate replace to={user.role === 'platform_owner' ? '/platform' : user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+        <Route path="/platform" element={<ProtectedRoute roles={['platform_owner']}><PlatformOwner /></ProtectedRoute>} />
         <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><UserDashboard /></ProtectedRoute>} />
         <Route path="/about" element={<About />} />
         {policies.map(policy => <Route key={policy} path={`/${policy}`} element={<Legal policy={policy} />} />)}
