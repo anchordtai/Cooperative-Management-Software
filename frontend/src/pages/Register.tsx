@@ -12,7 +12,7 @@ import {
   Grid,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import Brand from '../components/Brand';
+import { AuthBranding, ProductAttribution } from '../components/AuthBranding';
 
 const termsUrl = import.meta.env.REACT_APP_TERMS_URL;
 const privacyUrl = import.meta.env.REACT_APP_PRIVACY_URL;
@@ -137,18 +137,18 @@ const Register: React.FC = () => {
         }}
       >
         <Paper
-          elevation={3}
+          variant="outlined"
           sx={{
-            padding: 4,
+            padding: { xs: 2.5, sm: 4 },
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             width: '100%',
           }}
         >
-          <Box sx={{ mb: 2 }}><Brand /></Box>
+          <AuthBranding />
           <Typography component="h1" variant="h5">
-            Sign up
+            Register your cooperative
           </Typography>
           {error && (
             <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
@@ -295,6 +295,7 @@ const Register: React.FC = () => {
               </Link>
             </Box>
           </Box>
+          <ProductAttribution />
         </Paper>
       </Box>
     </Container>

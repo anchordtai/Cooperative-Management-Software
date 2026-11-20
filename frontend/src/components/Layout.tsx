@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import HistoryIcon from '@mui/icons-material/History';
 import Brand from './Brand';
+import { ProductAttribution } from './AuthBranding';
 import { AppearanceButton } from './Appearance';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -145,6 +146,7 @@ const Layout: React.FC = () => {
       >
         <Toolbar />
         <Outlet />
+        <ProductAttribution />
       </Box>
     </Box>
   );

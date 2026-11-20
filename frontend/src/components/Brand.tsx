@@ -1,20 +1,16 @@
 import React from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 import { Link } from 'react-router-dom';
+import { brand } from '../brand';
 
-export default function Brand({ to = '/' }: { to?: string }) {
+export default function Brand({ to = '/', inverse, onNavigate }: { to?: string; inverse?: boolean; onNavigate?: () => void }) {
+  const theme = useTheme();
+  const dark = inverse ?? theme.palette.mode === 'dark';
   return (
-    <Stack direction="row" alignItems="center" spacing={1.1} component={Link} to={to}
-      sx={{ color: 'text.primary', textDecoration: 'none', width: 'fit-content' }}>
-      <Box aria-hidden="true" sx={{
-        width: 36, height: 36, flexShrink: 0, borderRadius: 2.4, bgcolor: '#175c4d',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', gap: '3px', pl: '9px'
-      }}>
-        <Box sx={{ width: 18, height: 3, borderRadius: 1, bgcolor: '#cdede0' }} />
-        <Box sx={{ width: 13, height: 3, borderRadius: 1, bgcolor: '#efce92' }} />
-        <Box sx={{ width: 18, height: 3, borderRadius: 1, bgcolor: '#cdede0' }} />
-      </Box>
-      <Typography variant="body2" fontWeight={800} letterSpacing="0.05em">E-COOPERATIVE</Typography>
-    </Stack>
+    <Box component={Link} to={to} onClick={onNavigate} aria-label={`${brand.name} home`}
+      sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, width: 'fit-content' }}>
+      <Box component="img" src={dark ? brand.logo.dark : brand.logo.light} alt={brand.name}
+        width={669} height={132} sx={{ width: 'auto', height: { xs: 36, sm: 40 }, display: 'block' }} />
+    </Box>
   );
 }

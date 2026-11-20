@@ -1,3 +1,4 @@
+import { brand } from '../config/brand';
 import { Router } from 'express';
 import sequelize from '../config/database';
 import { authenticate, newToken, restrictTo, tokenHash } from '../middleware/auth';
@@ -67,7 +68,7 @@ router.post('/', async (req, res, next) => {
 async function deliverInvitation(email: string, token: string) {
   try {
     const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
-    await sendEmail(email, 'Activate your E-Cooperative staff account', `${frontend}/verify-account#invite=${token}`);
+    await sendEmail(email, `Activate your ${brand.name} staff account`, `${frontend}/verify-account#invite=${token}`);
     return true;
   } catch {
     return false;

@@ -1,5 +1,5 @@
 @echo off
-echo 🆓 FREE Deployment Script for E-Cooperative Management Software
+echo 🆓 FREE Deployment Script for Co-opSphere Software
 echo ================================================================
 
 echo.

@@ -1,5 +1,5 @@
 @echo off
-echo 🐳 E-Cooperative Docker Setup Script
+echo 🐳 Co-opSphere Docker Setup Script
 echo =====================================
 
 echo.

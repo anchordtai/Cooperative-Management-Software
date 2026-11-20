@@ -1,6 +1,6 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { Typography } from '@mui/material';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -12,6 +12,16 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyAccount from './pages/VerifyAccount';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
+import { About, Legal, Policy } from './pages/PublicInformation';
+import { brand } from './brand';
+
+const policies: Policy[] = ['terms', 'privacy', 'intellectual-property', 'acceptable-use'];
+const pageTitles: Record<string, string> = {
+  '/about': 'About', '/faq': 'FAQ', '/contact': 'Contact', '/login': 'Sign in', '/register': 'Register',
+  '/forgot-password': 'Forgot password', '/reset-password': 'Reset password', '/verify-account': 'Verify account',
+  '/terms': 'Terms and Conditions', '/privacy': 'Privacy Policy', '/intellectual-property': 'Intellectual Property',
+  '/acceptable-use': 'Acceptable Use', '/app': 'Cooperative Workspace', '/user-dashboard': 'Member Portal'
+};
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Members = lazy(() => import('./pages/Members'));
@@ -34,6 +44,14 @@ const ProtectedRoute = ({ children, roles, permission }: { children: React.React
 
 export default function App() {
   const { user, can } = useAuth();
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    const label = pageTitles[pathname] || (pathname.startsWith('/app/') ? 'Cooperative Workspace' : '');
+    document.title = label ? `${label} | ${brand.name}` : brand.title;
+    if (!hash) window.scrollTo(0, 0);
+    else document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [pathname, hash]);
 
   return (
     <Suspense fallback={<LoadingSpinner message="Loading page…" />}>
@@ -46,6 +64,8 @@ export default function App() {
         <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/dashboard" element={<Navigate to="/app" replace />} />
         <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><UserDashboard /></ProtectedRoute>} />
+        <Route path="/about" element={<About />} />
+        {policies.map(policy => <Route key={policy} path={`/${policy}`} element={<Legal policy={policy} />} />)}
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/app" element={<ProtectedRoute roles={['admin', 'staff']}><Layout /></ProtectedRoute>}>

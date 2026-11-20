@@ -1,9 +1,9 @@
 @echo off
-echo 🐳 E-Cooperative Docker Cleanup Script
+echo 🐳 Co-opSphere Docker Cleanup Script
 echo =======================================
 
 echo.
-echo 🛑 Stopping all E-Cooperative containers...
+echo 🛑 Stopping all Co-opSphere containers...
 docker-compose down
 
 echo.

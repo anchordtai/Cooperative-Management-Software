@@ -1,3 +1,4 @@
+import { AuthBranding, ProductAttribution } from '../components/AuthBranding';
 import React, { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Alert, Paper, Link } from '@mui/material';
 import api from '../services/api';
@@ -27,7 +28,8 @@ const ForgotPassword: React.FC = () => {
   return (
     <Container component="main" maxWidth="xs">
       <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Paper elevation={3} sx={{ padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+        <Paper variant="outlined" sx={{ padding: { xs: 2.5, sm: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <AuthBranding />
           <Typography component="h1" variant="h5" mb={2}>
             Forgot Password
           </Typography>
@@ -60,6 +62,7 @@ const ForgotPassword: React.FC = () => {
               Back to Login
             </Link>
           </Box>
+          <ProductAttribution />
         </Paper>
       </Box>
     </Container>

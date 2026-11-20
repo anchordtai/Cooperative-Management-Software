@@ -1,6 +1,10 @@
-# E-Cooperative
+# Co-opSphere
 
-E-Cooperative is a React, TypeScript, Material UI and Vite application backed by Express, Sequelize and PostgreSQL.
+Co-opSphere is a proprietary cooperative management software solution owned and developed by Mega Stride Technologies Limited. It is a React, TypeScript, Material UI and Vite application backed by Express, Sequelize and PostgreSQL.
+
+Cooperative Management, Simplified.
+
+See the [branding review](docs/branding-review.md) for public pages, assets and release checks.
 
 ## Development status
 

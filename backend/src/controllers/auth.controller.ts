@@ -1,3 +1,4 @@
+import { brand } from '../config/brand';
 import { randomInt } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
@@ -39,7 +40,7 @@ async function sendVerification(user: User) {
     emailVerificationToken: tokenHash(token),
     emailVerificationExpires: new Date(Date.now() + 24 * oneHour)
   });
-  return deliver(user.email, 'Verify your E-Cooperative account', `${frontend()}/verify-account#token=${token}`);
+  return deliver(user.email, `Verify your ${brand.name} account`, `${frontend()}/verify-account#token=${token}`);
 }
 
 function issueSession(res: Response, user: User, session: Session, refresh: string) {
@@ -161,7 +162,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       const challenge = newToken();
       res.cookie('challenge', challenge, { ...cookieOptions, path: '/api/auth', maxAge: 10 * 60 * 1000 });
       await user.update({ twoFACode: tokenHash(challenge + code), twoFACodeExpires: new Date(Date.now() + 10 * 60 * 1000) });
-      if (!await deliver(user.email, 'Your E-Cooperative verification code', code)) {
+      if (!await deliver(user.email, `Your ${brand.name} verification code`, code)) {
         throw new AppError('Verification email could not be delivered', 503);
       }
       res.json({ require2FA: true, twoFAMethod: 'email', message: 'Check your email for the verification code.' });
@@ -244,7 +245,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     if (user?.cooperativeId) {
       const token = newToken();
       await user.update({ passwordResetToken: tokenHash(token), passwordResetExpires: new Date(Date.now() + oneHour) });
-      await deliver(user.email, 'Reset your E-Cooperative password', `${frontend()}/reset-password#token=${token}`);
+      await deliver(user.email, `Reset your ${brand.name} password`, `${frontend()}/reset-password#token=${token}`);
     }
     res.json({ message: 'If the account is eligible, check your email for a reset link.' });
   } catch (error) {

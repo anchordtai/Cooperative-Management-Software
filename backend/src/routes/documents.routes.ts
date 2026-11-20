@@ -1,6 +1,7 @@
 import { Response, Router } from 'express';
 import PDFDocument from 'pdfkit';
 import { QueryTypes } from 'sequelize';
+import { brand } from '../config/brand';
 import sequelize from '../config/database';
 import { authenticate, restrictTo } from '../middleware/auth';
 import { financialScope, ownMember } from '../middleware/cooperative';
@@ -24,19 +25,32 @@ const category: Record<string, string> = {
 function pdf(res: Response, filename: string, cooperativeName: string, title: string) {
   res.setHeader('Content-Type', 'application/pdf');
   res.attachment(filename);
-  const document = new PDFDocument({ size: 'A4', margin: 46, bufferPages: true, info: { Title: title, Author: cooperativeName } });
+  const document = new PDFDocument({ size: 'A4', margin: 46, bufferPages: true, info: { Title: title, Author: cooperativeName, Creator: brand.name } });
   document.on('error', error => res.destroy(error));
   document.pipe(res);
-  document.fillColor('#166353').font('Helvetica-Bold').fontSize(12).text(cooperativeName);
-  document.moveDown(0.8).fillColor('#172B25').fontSize(23).text(title);
+  document.fillColor(brand.colors.royal).font('Helvetica-Bold').fontSize(12).text(cooperativeName);
+  document.moveDown(0.8).fillColor(brand.colors.navy).fontSize(23).text(title);
   document.moveDown().font('Helvetica').fontSize(10);
   return document;
 }
 
 function field(document: PDFKit.PDFDocument, label: string, value: string) {
-  document.fillColor('#4D6259').fontSize(9).text(label);
-  document.fillColor('#172B25').fontSize(11).text(value);
+  document.fillColor(brand.colors.muted).fontSize(9).text(label);
+  document.fillColor(brand.colors.navy).fontSize(11).text(value);
   document.moveDown(0.7);
+}
+
+function finishPdf(document: PDFKit.PDFDocument) {
+  const pages = document.bufferedPageRange();
+  for (let index = pages.start; index < pages.start + pages.count; index++) {
+    document.switchToPage(index);
+    document.font('Helvetica').fontSize(8).fillColor(brand.colors.muted);
+    document.text(`${brand.name} · ${brand.attribution}`, 46, 782, { lineBreak: false });
+    const pageLabel = `Page ${index + 1} of ${pages.count}`;
+    const pageLabelX = document.page.width - document.page.margins.right - document.widthOfString(pageLabel);
+    document.text(pageLabel, pageLabelX, 782, { lineBreak: false });
+  }
+  document.end();
 }
 
 router.use(authenticate);
@@ -74,7 +88,7 @@ router.get('/receipts/:id', permit('finance.read', true), async (req, res, next)
     if (reference) field(document, 'External payment reference', reference);
     if (details.officer) field(document, 'Recorded by', details.officer);
     field(document, 'Description', entry.description || '');
-    document.end();
+    finishPdf(document);
   } catch (error) {
     next(error);
   }
@@ -114,13 +128,7 @@ router.get('/my-savings-statement', restrictTo('member'), async (req, res, next)
       if (row.externalReference) document.font('Helvetica').text(`Reference ${row.externalReference}`);
       document.moveDown(0.6);
     }
-    const pages = document.bufferedPageRange();
-    for (let index = pages.start; index < pages.start + pages.count; index++) {
-      document.switchToPage(index);
-      document.font('Helvetica').fontSize(9).fillColor('#4D6259')
-        .text(`Page ${index + 1} of ${pages.count}`, 46, 782, { align: 'right', lineBreak: false });
-    }
-    document.end();
+    finishPdf(document);
   } catch (error) {
     next(error);
   }

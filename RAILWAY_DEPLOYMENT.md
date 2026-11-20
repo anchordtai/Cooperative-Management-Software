@@ -24,7 +24,7 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    service: 'E-Cooperative Backend'
+    service: 'Co-opSphere Backend'
   });
 });
 ```

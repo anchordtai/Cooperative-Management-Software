@@ -1,3 +1,5 @@
+import Brand from '../components/Brand';
+import { ProductAttribution } from '../components/AuthBranding';
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { saveAs } from 'file-saver';
 import { useSearchParams } from 'react-router-dom';
@@ -134,6 +136,7 @@ export default function UserDashboard() {
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 1120, mx: 'auto', p: { xs: 2, sm: 4 } }}>
+      <Brand to="/user-dashboard" />
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <div>
           <Typography component="h1" variant="h4">{profile ? `Welcome, ${profile.firstName}` : 'Member portal'}</Typography>
@@ -212,6 +215,7 @@ export default function UserDashboard() {
           </Stack>)}
         </CardContent></Card>
       </>}
+      <ProductAttribution />
     </Stack>
   );
 }

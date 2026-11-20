@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { brand } from '../config/brand';
 
 function smtpConfiguration() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
@@ -25,5 +26,6 @@ export const sendEmail = async (to: string, subject: string, text: string) => {
     socketTimeout: 10000
   });
 
-  return transporter.sendMail({ from, to, subject, text });
+  const footer = [brand.name, brand.tagline, brand.attribution].join('\n');
+  return transporter.sendMail({ from, to, subject, text: `${text}\n\n${footer}` });
 };

@@ -1,4 +1,4 @@
--- E-Cooperative Database Setup Script for PostgreSQL
+-- Co-opSphere Database Setup Script for PostgreSQL
 -- Run this script after installing PostgreSQL
 
 -- Create database (run this as postgres superuser)

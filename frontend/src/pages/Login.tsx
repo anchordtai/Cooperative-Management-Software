@@ -11,7 +11,7 @@ import {
   Paper,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import Brand from '../components/Brand';
+import { AuthBranding, ProductAttribution } from '../components/AuthBranding';
 import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Visibility from '@mui/icons-material/Visibility';
@@ -103,10 +103,13 @@ const Login: React.FC = () => {
   return (
     <Container component="main" maxWidth="xs">
       <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Paper elevation={3} sx={{ padding: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-          <Box sx={{ mb: 2 }}><Brand /></Box>
+        <Paper variant="outlined" sx={{ padding: { xs: 2.5, sm: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <AuthBranding />
           <Typography component="h1" variant="h5">
-            Sign in
+            Welcome to Co-opSphere
+          </Typography>
+          <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
+            Manage your cooperative, members, savings, loans and financial operations in one workspace.
           </Typography>
           {successMessage && (
             <Alert severity="success" sx={{ mt: 2, width: '100%' }}>
@@ -216,6 +219,7 @@ const Login: React.FC = () => {
               </Button>
           </Box>
           )}
+          <ProductAttribution />
         </Paper>
       </Box>
     </Container>

@@ -26,6 +26,7 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
+import { brand } from '../../brand';
 import { useAuth } from '../../contexts/AuthContext';
 
 const drawerWidth = 240;
@@ -72,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          E-Cooperative
+          {brand.name}
         </Typography>
       </Toolbar>
       <List>

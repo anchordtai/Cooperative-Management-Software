@@ -1,4 +1,4 @@
-# 🆓 Complete FREE Deployment Guide for E-Cooperative Management Software
+# 🆓 Complete FREE Deployment Guide for Co-opSphere Software
 
 ## 🎯 Best Free Deployment Combinations
 
@@ -42,7 +42,7 @@
 5. **Set Environment Variables**:
    ```
    REACT_APP_API_URL = https://your-backend.railway.app/api
-   REACT_APP_APP_NAME = E-Cooperative Management
+   REACT_APP_APP_NAME = Co-opSphere
    NODE_ENV = production
    ```
 6. **Deploy**: Click "Deploy" - Done! ✅
@@ -212,4 +212,4 @@ railway up
 - **Small Production App**: $0-5/month
 - **Growing App**: $10-20/month (when you outgrow free tiers)
 
-Your E-Cooperative Management Software will run **completely free** on these platforms for development and small-scale production use! 🎉
+Your Co-opSphere Software will run **completely free** on these platforms for development and small-scale production use! 🎉

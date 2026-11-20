@@ -1,3 +1,4 @@
+import { AuthBranding, ProductAttribution } from '../components/AuthBranding';
 import React, { useState } from 'react';
 import { Alert, Button, Container, Link, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useLocation, Link as RouterLink } from 'react-router-dom';
@@ -36,7 +37,8 @@ export default function VerifyAccount() {
 
   return (
     <Container maxWidth="xs" sx={{ py: 8 }}>
-      <Paper sx={{ p: 4 }}>
+      <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 4 } }}>
+        <AuthBranding />
         <Stack component="form" spacing={2} onSubmit={submit}>
           <Typography component="h1" variant="h5">{invitation ? 'Activate your account' : 'Verify your email'}</Typography>
           {message && <Alert severity={done ? 'success' : 'info'}>{message}</Alert>}
@@ -52,6 +54,7 @@ export default function VerifyAccount() {
           </>}
           <Link component={RouterLink} to="/login">Back to sign in</Link>
         </Stack>
+        <ProductAttribution />
       </Paper>
     </Container>
   );

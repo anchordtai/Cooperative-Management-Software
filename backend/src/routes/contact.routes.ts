@@ -1,3 +1,4 @@
+import { brand } from '../config/brand';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { AppError } from '../middleware/errorHandler';
@@ -16,7 +17,7 @@ router.post('/', rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, message: { mess
     const recipient = process.env.SUPPORT_EMAIL;
     if (!recipient) throw new AppError('The contact form is currently unavailable', 503);
     try {
-      await sendEmail(recipient, 'E-Cooperative website enquiry', `From ${name.trim()} <${email.trim()}>\n\n${message.trim()}`);
+      await sendEmail(recipient, `${brand.name} website enquiry`, `From ${name.trim()} <${email.trim()}>\n\n${message.trim()}`);
     } catch {
       throw new AppError('Your message could not be sent. Please try again later', 503);
     }
