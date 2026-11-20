@@ -1,6 +1,7 @@
 import sequelize from './config/database';
 import './models';
 import './models/Session';
+import { saasSchema } from './saas-schema';
 
 async function migrate() {
   await sequelize.transaction(async transaction => {
@@ -171,6 +172,11 @@ async function migrate() {
           FOR EACH ROW EXECUTE FUNCTION reject_financial_posting_change();
         INSERT INTO "SchemaMigrations" (version) VALUES ('005_platform_owner');
       `);
+    }
+    const [saas] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '006_saas_billing'`);
+    if (saas.length === 0) {
+      await run(saasSchema);
+      await run(`INSERT INTO "SchemaMigrations" (version) VALUES ('006_saas_billing')`);
     }
   });
 }

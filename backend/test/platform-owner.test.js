@@ -103,6 +103,21 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   assert.equal(detail.lastAccessChange, null);
   assert.equal('email' in detail, false);
 
+  const billingDirectory = '/platform/billing/subscriptions?search=' + cooperative.id;
+  await tenant(billingDirectory, 'GET', undefined, 403);
+  assert.equal((await owner(billingDirectory)).data[0].status, 'unsubscribed');
+  const growth = (await owner('/platform/billing/plans')).data.find(plan => plan.slug === 'growth');
+  await owner('/platform/billing/plans/growth', 'PUT', { ...growth, maximumMembers: 100 }, 409);
+  await owner('/platform/billing/plans/growth', 'PUT', { ...growth, trialDays: 7 });
+  await owner('/platform/billing/trial/' + cooperative.id, 'POST', { plan: 'growth' }, 201);
+  await owner('/platform/billing/trial/' + cooperative.id, 'POST', { plan: 'growth' }, 409);
+  assert.equal((await owner(billingDirectory)).data[0].status, 'trial');
+  assert.equal((await tenant('/billing/access')).data.maximum, 250);
+  await owner('/platform/billing/plans/growth', 'PUT', growth);
+  assert.deepEqual((await owner('/platform/billing/payments?status=review&search=' + cooperative.id)).data, []);
+  await owner('/platform/billing/payments?status=invalid', 'GET', undefined, 400);
+  await client()('/jobs/billing', 'GET', undefined, 401);
+
   const status = '/platform/tenants/' + cooperative.id + '/status';
   await tenant(status, 'PATCH', { status: 'suspended' }, 403);
   await owner(status, 'PATCH', { status: 'suspended' });

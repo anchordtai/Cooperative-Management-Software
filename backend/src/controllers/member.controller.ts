@@ -8,6 +8,7 @@ import { AppError } from '../middleware/errorHandler';
 import { newToken, tokenHash } from '../middleware/auth';
 import { ownMember } from '../middleware/cooperative';
 import { sendEmail } from '../utils/email';
+import { checkCapacity } from '../services/subscriptions';
 
 const statuses = ['active', 'inactive', 'suspended'];
 const requiredText = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= 160;
@@ -50,12 +51,15 @@ export const createMember = async (req: Request, res: Response, next: NextFuncti
       throw new AppError('Enter the member name, email, phone and address', 400);
     }
 
-    const member = await Member.create({
-      cooperativeId: req.user!.cooperativeId,
-      membershipNumber: `EC-${randomUUID()}`,
-      firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(),
-      email: email.trim().toLowerCase(), address: address.trim(), dateOfBirth: dateOfBirth || null,
-      status: 'inactive'
+    const cooperativeId = req.user!.cooperativeId;
+    const member = await sequelize.transaction(async transaction => {
+      await checkCapacity(cooperativeId, 1, transaction);
+      return Member.create({
+        cooperativeId, membershipNumber: `EC-${randomUUID()}`,
+        firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(),
+        email: email.trim().toLowerCase(), address: address.trim(), dateOfBirth: dateOfBirth || null,
+        status: 'inactive'
+      }, { transaction });
     });
     res.status(201).json({ status: 'success', data: member });
   } catch (error) {

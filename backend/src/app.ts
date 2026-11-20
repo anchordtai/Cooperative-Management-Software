@@ -18,6 +18,11 @@ import auditRoutes from './routes/audit.routes';
 import paymentsRoutes, { paystackWebhook } from './routes/payments.routes';
 import documentsRoutes from './routes/documents.routes';
 import platformRoutes from './routes/platform.routes';
+import { billingJob, billingRoutes, billingWebhook, platformBilling } from './routes/billing.routes';
+import { authenticate } from './middleware/auth';
+import { requireSubscription } from './middleware/subscription';
+import { memberImport } from './routes/member-import.routes';
+import { subscriptionEnforced } from './services/subscriptions';
 
 const app = express();
 const deployedHosts = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL];
@@ -35,6 +40,8 @@ app.use(cors({
   credentials: true
 }));
 app.post('/api/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), paystackWebhook);
+app.post('/api/billing/webhooks/paystack', express.raw({ type: 'application/json', limit: '64kb' }), billingWebhook('paystack'));
+app.post('/api/billing/webhooks/flutterwave', express.raw({ type: 'application/json', limit: '64kb' }), billingWebhook('flutterwave'));
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
 app.use('/api', (req, res, next) => {
@@ -51,6 +58,11 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
+if (subscriptionEnforced()) {
+  app.use(['/api/members', '/api/financial', '/api/transactions', '/api/dashboard', '/api/reports',
+    '/api/staff', '/api/audit', '/api/payments', '/api/documents', '/api/settings'], authenticate, requireSubscription);
+}
+app.use('/api/members/import', memberImport);
 app.use('/api/members', memberRoutes);
 app.use('/api/financial', financialRoutes);
 app.use('/api/transactions', transactionsRoutes);
@@ -62,7 +74,10 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/platform/billing', platformBilling);
 app.use('/api/platform', platformRoutes);
+app.use('/api/billing', billingRoutes);
+app.get('/api/jobs/billing', billingJob);
 
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {
