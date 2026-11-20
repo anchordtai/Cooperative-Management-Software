@@ -85,6 +85,20 @@ test('verified test checkout and concurrent webhooks post one deposit', { timeou
     { replacements: { reference } });
   assert.equal(entries[0].count, '1');
 
+  const admin = await User.create({
+    email: randomUUID() + '@example.test', password, role: 'admin', cooperativeId: cooperative.id,
+    phone: '08012345678', isEmailVerified: true
+  });
+  const adminCookie = await login(admin.email);
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const comparison = await call('/reports/statement-matching', adminCookie, 'POST', {
+    from: day, to: day, csv: 'date,reference,direction,amount\n' + day + ',' + reference + ',credit,200.50'
+  });
+  assert.equal(comparison.status, 200);
+  const { data: matched } = await comparison.json();
+  assert.equal(matched.recordedCount, 0);
+  assert.equal(matched.rows[0].status, 'statement_only');
+
   const mismatch = await call('/payments/deposit', cookie, 'POST', { amount: '201.50' });
   assert.equal(mismatch.status, 201);
   const mismatchedReference = (await mismatch.json()).data.reference;

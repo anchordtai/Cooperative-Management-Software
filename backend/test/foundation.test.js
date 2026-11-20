@@ -138,6 +138,7 @@ test('onboarding, rotating sessions, member approval, and cooperative isolation'
   assert.equal((await staffClient.request('/members')).results, 1);
   await staffClient.request('/staff', 'GET', undefined, 403);
   await staffClient.request('/reports/activity', 'GET', undefined, 403);
+  await staffClient.request('/reports/reconciliation?from=2024-04-01&to=2024-04-01', 'GET', undefined, 403);
 
   const deposit = { memberId: member.id, type: 'deposit', amount: '1200.05', description: 'Savings contribution', reference: 'DEP-001' };
   await adminB.request('/transactions', 'POST', deposit, 404);
@@ -236,6 +237,100 @@ test('onboarding, rotating sessions, member approval, and cooperative isolation'
   const otherReport = (await adminB.request('/reports/activity?months=3')).data;
   assert.equal(otherReport[2].deposits, '0');
   await memberClient.request('/reports/activity', 'GET', undefined, 403);
+
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  const reconciliation = '/reports/reconciliation?from=' + today + '&to=' + today;
+  const clean = (await adminA.request(reconciliation)).data;
+  assert.deepEqual({
+    opening: clean.openingSavings, deposits: clean.deposits, withdrawals: clean.withdrawals,
+    closing: clean.closingSavings, disbursed: clean.disbursements, repaid: clean.repayments,
+    currentSavings: clean.currentSavings, currentLoans: clean.currentLoans,
+    transactionCount: clean.transactionCount, issueCount: clean.issueCount
+  }, {
+    opening: '0.00', deposits: '1200.05', withdrawals: '100.05', closing: '1100.00', disbursed: '300.00',
+    repaid: '309.00', currentSavings: '1100.00', currentLoans: '0.00', transactionCount: 5, issueCount: 0
+  });
+  assert.deepEqual(clean.issues, []);
+  const isolated = (await adminB.request(reconciliation)).data;
+  assert.equal(isolated.closingSavings, '0.00');
+  assert.equal(isolated.issueCount, 0);
+  await adminA.request('/reports/reconciliation?from=2024-02-30&to=2024-03-01', 'GET', undefined, 400);
+  await adminA.request(reconciliation + '&page=0', 'GET', undefined, 400);
+  await memberClient.request(reconciliation, 'GET', undefined, 403);
+
+  const statementUrl = '/reports/statement-matching';
+  const csv = [
+    '"date","reference","direction","amount"',
+    today + ',dep-001,credit,1200.05',
+    today + ',WD-001,credit,100.05',
+    today + ',DF-001,debit,310.00',
+    today + ',RP-001,credit,105.00',
+    today + ',rp-001,credit,105.00',
+    today + ',"External, unknown",debit,20.00'
+  ].join('\r\n');
+  const statement = { from: today, to: today, csv: '\uFEFF' + csv };
+  const matching = (await adminA.request(statementUrl, 'POST', statement)).data;
+  assert.equal(matching.statementCount, 6);
+  assert.equal(matching.recordedCount, 5);
+  assert.equal(matching.matched, 1);
+  assert.deepEqual(matching.rows.map(row => row.status), [
+    'matched', 'direction_mismatch', 'amount_mismatch', 'duplicate_reference', 'duplicate_reference', 'statement_only', 'record_only'
+  ]);
+  assert.equal(matching.rows[0].recorded.id, receipt.id);
+  assert.equal(matching.rows[5].statement.reference, 'External, unknown');
+  assert.equal(matching.rows[6].recorded.reference, 'RP-002');
+  const outside = (await adminB.request(statementUrl, 'POST', statement)).data;
+  assert.equal(outside.recordedCount, 0);
+  assert.equal(outside.matched, 0);
+  assert(outside.rows.every(row => row.recorded === null));
+  await memberClient.request(statementUrl, 'POST', statement, 403);
+  await adminA.request(statementUrl, 'POST', { ...statement, csv: csv.replace('1200.05', '1200.055') }, 400);
+  await adminA.request(statementUrl, 'POST', { ...statement, csv: csv.replace(today + ',dep-001', '2024-02-30,dep-001') }, 400);
+  const dayBefore = new Date(Date.parse(today + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const differentDay = (await adminA.request(statementUrl, 'POST', {
+    from: dayBefore, to: today, csv: 'date,reference,direction,amount\n' + dayBefore + ',DEP-001,credit,1200.05'
+  })).data;
+  assert.equal(differentDay.rows[0].status, 'date_mismatch');
+  assert.equal(differentDay.rows[0].recorded.date, today);
+  assert.equal((await adminA.request('/reports/reconciliation?from=' + today + '&to=' + today)).data.transactionCount, 5);
+
+  // Put three completed legacy records around the selected local day. A withdrawal
+  // created earlier belongs to the day when it was completed.
+  const [beforeId, duringId, afterId] = Array.from({ length: 3 }, () => randomUUID());
+  await sequelize.query(`
+    INSERT INTO "Transactions" (id, "cooperativeId", "memberId", type, amount, status, description,
+      "externalReference", "createdAt", "updatedAt")
+      VALUES
+        (:beforeId, :cooperativeId, :memberId, 'deposit', 200, 'completed', 'Legacy opening deposit',
+          'LEGACY-DEP', '2024-03-31T22:59:59Z', '2024-03-31T22:59:59Z'),
+        (:duringId, :cooperativeId, :memberId, 'withdrawal', 15.25, 'completed', 'Legacy payout',
+          'LEGACY-WD', '2024-03-31T22:00:00Z', '2024-03-31T23:00:00Z'),
+        (:afterId, :cooperativeId, :memberId, 'deposit', 100, 'completed', 'Next day deposit',
+          'LEGACY-NEXT', '2024-04-01T23:00:00Z', '2024-04-01T23:00:00Z')
+  `, { replacements: { beforeId, duringId, afterId, cooperativeId: userA.cooperativeId, memberId: member.id } });
+
+  const historicalUrl = '/reports/reconciliation?from=2024-04-01&to=2024-04-01';
+  const historical = (await adminA.request(historicalUrl)).data;
+  assert.equal(historical.openingSavings, '200.00');
+  assert.equal(historical.deposits, '0.00');
+  assert.equal(historical.withdrawals, '15.25');
+  assert.equal(historical.closingSavings, '184.75');
+  assert.equal(historical.currentSavings, '1100.00');
+  assert.equal(historical.transactionCount, 1);
+  assert.deepEqual(historical.issues.map(issue => [issue.reason, issue.recordId, issue.expected, issue.recorded]), [
+    ['missing_postings', duringId, '15.25', '0.00'],
+    ['savings_balance', member.id, '1384.75', '1100.00']
+  ]);
+  assert.equal(historical.issues[0].reference, 'LEGACY-WD');
+
+  await sequelize.query('UPDATE "Loans" SET "remainingBalance" = 1 WHERE id = :loanId',
+    { replacements: { loanId: loan.id } });
+  const drift = (await adminA.request(historicalUrl)).data;
+  assert(drift.issues.some(issue => issue.reason === 'loan_balance' && issue.recordId === loan.id &&
+    issue.expected === '0.00' && issue.recorded === '1.00'));
+  assert.equal((await adminB.request(historicalUrl)).data.issueCount, 0);
 
   await adminA.request('/members/' + member.id, 'PUT', { status: 'suspended' });
   await memberClient.request('/auth/me', 'GET', undefined, 401);

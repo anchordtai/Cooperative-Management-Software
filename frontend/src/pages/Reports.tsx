@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, MenuItem, Paper, Skeleton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, MenuItem, Paper, Skeleton, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { saveAs } from 'file-saver';
 import api from '../services/api';
+import Reconciliation from './Reconciliation';
+import StatementMatching from './StatementMatching';
 
 interface Activity {
   month: string;
@@ -19,7 +21,7 @@ const series = [
 ] as const;
 const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
 
-export default function Reports() {
+function FinancialActivity() {
   const [months, setMonths] = useState('6');
   const [rows, setRows] = useState<Activity[] | null>(null);
   const [error, setError] = useState('');
@@ -76,4 +78,18 @@ export default function Reports() {
       </Paper>}
     </Stack>
   );
+}
+
+export default function Reports() {
+  const [view, setView] = useState<'activity' | 'reconciliation' | 'statement'>('activity');
+  return <Stack spacing={3}>
+    <Tabs variant="scrollable" allowScrollButtonsMobile value={view} onChange={(_event, next: typeof view) => setView(next)} aria-label="Financial reports">
+      <Tab value="activity" id="report-activity" aria-controls="report-panel" label="Activity" />
+      <Tab value="reconciliation" id="report-reconciliation" aria-controls="report-panel" label="Reconciliation" />
+      <Tab value="statement" id="report-statement" aria-controls="report-panel" label="Bank statements" />
+    </Tabs>
+    <div role="tabpanel" id="report-panel" aria-labelledby={`report-${view}`}>
+      {view === 'activity' ? <FinancialActivity /> : view === 'reconciliation' ? <Reconciliation /> : <StatementMatching />}
+    </div>
+  </Stack>;
 }
