@@ -9,7 +9,8 @@
     "build": "tsc",
     "test": "node --test test/*.test.js",
     "db:init": "npm run build && npm run db:migrate",
-    "db:migrate": "node dist/migrate.js"
+    "db:migrate": "node dist/migrate.js",
+    "owner:provision": "node dist/provision-owner.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

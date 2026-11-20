@@ -13,7 +13,7 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   t.after(() => { process.env = original; });
 
   for (const expected of ['Platform owner provisioned', 'Platform owner already provisioned']) {
-    const run = spawnSync(process.execPath, ['dist/provision-owner.js'], { env: process.env, encoding: 'utf8' });
+    const run = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'owner:provision'], { env: process.env, encoding: 'utf8' });
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, new RegExp(expected));
   }
