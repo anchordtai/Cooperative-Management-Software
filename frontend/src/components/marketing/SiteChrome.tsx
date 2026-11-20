@@ -8,7 +8,7 @@ import { brand } from '../../brand';
 import './marketing.css';
 
 const platform = [['Features', '/#features'], ['Solutions', '/#solutions'], ['How It Works', '/#how-it-works']] as const;
-const company = [['About', '/about'], ['Contact', '/contact']] as const;
+const company = [['Pricing', '/pricing'], ['About', '/about'], ['Contact', '/contact']] as const;
 
 function NavigationLinks({ onClick }: { onClick?: () => void }) {
   return <>

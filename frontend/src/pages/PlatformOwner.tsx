@@ -13,6 +13,7 @@ import Brand from '../components/Brand';
 import { AppearanceButton } from '../components/Appearance';
 import { ProductAttribution } from '../components/AuthBranding';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 interface Overview {
@@ -170,6 +171,7 @@ export default function PlatformOwner() {
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
         <Brand to="/platform" />
         <Stack direction="row" alignItems="center">
+          <Button component={Link} to="/platform/billing">Billing</Button>
           <AppearanceButton />
           <Button onClick={() => logout().catch(() => setNotice({ error: true, text: 'Could not sign out. Try again.' }))}>Sign out</Button>
         </Stack>

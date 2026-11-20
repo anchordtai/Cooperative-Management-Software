@@ -34,6 +34,8 @@ import { useAuth } from '../contexts/AuthContext';
 const drawerWidth = 240;
 
 const menuItems = [
+  { text: 'Billing', icon: <SettingsIcon />, path: '/billing', adminOnly: true },
+  { text: 'Import members', icon: <PeopleIcon />, path: '/app/members/import', adminOnly: true },
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/app' },
   { text: 'Members', icon: <PeopleIcon />, path: '/app/members', permission: 'members.read' },
   { text: 'Transactions', icon: <AccountBalanceIcon />, path: '/app/transactions', permission: 'finance.read' },

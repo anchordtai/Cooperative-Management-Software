@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -14,6 +14,9 @@ import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import { About, Legal, Policy } from './pages/PublicInformation';
 import { brand } from './brand';
+import api from './services/api';
+import { Alert, Button, Stack } from '@mui/material';
+import { Link } from 'react-router-dom';
 
 const policies: Policy[] = ['terms', 'privacy', 'intellectual-property', 'acceptable-use'];
 const pageTitles: Record<string, string> = {
@@ -33,6 +36,30 @@ const Staff = lazy(() => import('./pages/Staff'));
 const Audit = lazy(() => import('./pages/Audit'));
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
 const PlatformOwner = lazy(() => import('./pages/PlatformOwner'));
+
+const Billing = lazy(() => import('./pages/Billing'));
+const PlatformBilling = lazy(() => import('./pages/PlatformBilling'));
+const MemberImport = lazy(() => import('./pages/MemberImport'));
+
+function SubscriptionWorkspace({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api.get('/billing/access').then(({ data }) => { if (active) setAllowed(data.data.allowed); })
+      .catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, []);
+  if (error) return <Alert severity="error">Could not check subscription access. Reload and try again.</Alert>;
+  if (allowed === null) return <LoadingSpinner message="Checking subscription…" />;
+  if (allowed) return <>{children}</>;
+  if (user?.role === 'admin') return <Navigate to="/billing" replace />;
+  return <Stack component="main" sx={{ p: 3 }}>
+    <Alert severity="info">Workspace access is paused. Contact your cooperative administrator about billing.</Alert>
+    <Button component={Link} to="/contact">Contact support</Button>
+  </Stack>;
+}
 
 const ProtectedRoute = ({ children, roles, permission }: { children: React.ReactNode; roles?: string[]; permission?: string }) => {
   const { user, loading, can } = useAuth();
@@ -59,6 +86,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={user ? <Navigate replace to={user.role === 'platform_owner' ? '/platform' : user.role === 'member' ? '/user-dashboard' : '/app'} /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/pricing" element={<Billing publicPricing />} />
+        <Route path="/billing" element={<ProtectedRoute roles={['admin']}><Billing /></ProtectedRoute>} />
+        <Route path="/platform/billing" element={<ProtectedRoute roles={['platform_owner']}><PlatformBilling /></ProtectedRoute>} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -68,14 +98,15 @@ export default function App() {
         <Route path="/platform/forgot-password" element={<ForgotPassword />} />
         <Route path="/platform/reset-password" element={<ResetPassword />} />
         <Route path="/platform" element={<ProtectedRoute roles={['platform_owner']}><PlatformOwner /></ProtectedRoute>} />
-        <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><UserDashboard /></ProtectedRoute>} />
+        <Route path="/user-dashboard" element={<ProtectedRoute roles={['member']}><SubscriptionWorkspace><UserDashboard /></SubscriptionWorkspace></ProtectedRoute>} />
         <Route path="/about" element={<About />} />
         {policies.map(policy => <Route key={policy} path={`/${policy}`} element={<Legal policy={policy} />} />)}
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/app" element={<ProtectedRoute roles={['admin', 'staff']}><Layout /></ProtectedRoute>}>
+        <Route path="/app" element={<ProtectedRoute roles={['admin', 'staff']}><SubscriptionWorkspace><Layout /></SubscriptionWorkspace></ProtectedRoute>}>
           <Route index element={can('finance.read') ? <Dashboard /> : <Typography component="h1" variant="h4">Cooperative workspace</Typography>} />
           <Route path="members" element={<ProtectedRoute permission="members.read"><Members /></ProtectedRoute>} />
+          <Route path="members/import" element={<ProtectedRoute roles={['admin']}><MemberImport /></ProtectedRoute>} />
           <Route path="transactions" element={<ProtectedRoute permission="finance.read"><Transactions /></ProtectedRoute>} />
           <Route path="loans" element={<ProtectedRoute permission="finance.read"><Loans /></ProtectedRoute>} />
           <Route path="reports" element={<ProtectedRoute permission="reports.read"><Reports /></ProtectedRoute>} />
