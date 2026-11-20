@@ -6,7 +6,7 @@ import sequelize from '../config/database';
 import Cooperative from '../models/Cooperative';
 import Session from '../models/Session';
 import { User } from '../models/User';
-import { sendEmail } from '../utils/email';
+import { isEmailConfigured, sendEmail } from '../utils/email';
 import { canSignIn, cookieOptions, newToken, setSessionCookies, tokenHash } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 
@@ -63,6 +63,10 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     if (!email || !strongPassword(password) ||
       !required.every(value => typeof value === 'string' && value.trim() && value.length <= 160)) {
       throw new AppError('Enter a cooperative name, full name, email, phone and a password of at least 12 characters', 400);
+    }
+
+    if (process.env.NODE_ENV === 'production' && !isEmailConfigured()) {
+      throw new AppError('Registration is temporarily unavailable because verification email is offline. Please try again later.', 503);
     }
 
     const user = await sequelize.transaction(async transaction => {
