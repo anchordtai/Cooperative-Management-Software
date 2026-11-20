@@ -58,6 +58,8 @@ test('platform owner activates privately, verifies each sign-in and controls ten
 
   await tenant('/auth/login', 'POST', { email: tenantEmail, password });
   await tenant('/platform/tenants', 'GET', undefined, 403);
+  await tenant('/platform/overview', 'GET', undefined, 403);
+  await tenant('/platform/tenants/' + cooperative.id, 'GET', undefined, 403);
   await client()('/platform/tenants', 'GET', undefined, 401);
 
   await owner('/auth/forgot-password', 'POST', { email, platform: true });
@@ -84,12 +86,29 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   await owner('/members', 'GET', undefined, 403);
   await owner('/transactions', 'GET', undefined, 403);
   const directory = await owner('/platform/tenants?limit=100');
-  assert(directory.data.some(row => row.id === cooperative.id && row.suspendedAt === null));
+  assert(directory.data.some(row => row.id === cooperative.id && row.suspendedAt === null && row.hasActiveAdmin));
+  const overview = (await owner('/platform/overview')).data;
+  assert(Number(overview.tenantCount) >= 1);
+  assert(Number(overview.activeTenants) >= 1);
+  assert.equal(typeof overview.asOf, 'string');
+  const results = await owner('/platform/tenants?search=' + cooperative.id + '&status=active&sort=name&limit=1');
+  assert.deepEqual(results.data.map(row => row.id), [cooperative.id]);
+  assert.equal(results.hasNext, false);
+  assert.deepEqual((await owner('/platform/tenants?search=%25&status=all')).data, []);
+  await owner('/platform/tenants?status=invalid', 'GET', undefined, 400);
+  const detail = (await owner('/platform/tenants/' + cooperative.id)).data;
+  assert.equal(detail.verifiedAdmins, '1');
+  assert.equal(detail.pendingAdmins, '0');
+  assert.equal(detail.activeMembers, '0');
+  assert.equal(detail.lastAccessChange, null);
+  assert.equal('email' in detail, false);
 
   const status = '/platform/tenants/' + cooperative.id + '/status';
   await tenant(status, 'PATCH', { status: 'suspended' }, 403);
   await owner(status, 'PATCH', { status: 'suspended' });
   await owner(status, 'PATCH', { status: 'suspended' });
+  assert.deepEqual((await owner('/platform/tenants?search=' + cooperative.id + '&status=active')).data, []);
+  assert.equal((await owner('/platform/tenants?search=' + cooperative.id + '&status=suspended')).data.length, 1);
   await tenant('/auth/me', 'GET', undefined, 401);
   await tenant('/auth/login', 'POST', { email: tenantEmail, password }, 403);
   await owner(status, 'PATCH', { status: 'active' });
@@ -97,4 +116,8 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   await tenant('/auth/login', 'POST', { email: tenantEmail, password });
   const audit = (await owner('/platform/audit')).data.filter(row => row.cooperativeId === cooperative.id);
   assert.deepEqual(audit.map(row => row.action), ['tenant.reactivated', 'tenant.suspended']);
+  const filtered = (await owner('/platform/audit?tenantId=' + cooperative.id + '&action=tenant.suspended')).data;
+  assert.deepEqual(filtered.map(row => row.id), [audit[1].id]);
+  await owner('/platform/audit?tenantId=invalid', 'GET', undefined, 400);
+  assert((await owner('/platform/tenants/' + cooperative.id)).data.lastAccessChange);
 });
