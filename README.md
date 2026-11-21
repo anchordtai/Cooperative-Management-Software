@@ -17,7 +17,9 @@ The project is in development. Configurable financial products, general-ledger m
 Use Node.js 22.12 or later and PostgreSQL. Create an empty PostgreSQL database and configure a database user with access.
 
 1. Copy `backend/.env.example` to `backend/.env` and set the PostgreSQL connection, a unique `JWT_SECRET` of at least 32 bytes, and the frontend URL. Use `openssl rand -hex 32` to generate a secret.
-2. Configure authenticated SMTP for verification, invitations and password recovery. Set `SUPPORT_EMAIL` to accept website enquiries. Port 465 uses implicit TLS. Other ports require STARTTLS.
+2. Configure authenticated SMTP for verification, invitations and password recovery. Port 465 uses implicit TLS. Other ports require STARTTLS.
+
+   For the contact and demo forms, create a Managed widget in Cloudflare Turnstile for the public Vercel hostname. Set `SUPPORT_EMAIL` to the monitored enquiry inbox, `TURNSTILE_HOSTNAME` to the exact widget hostname without a scheme or path, `TURNSTILE_SITE_KEY` to the public key and `TURNSTILE_SECRET_KEY` to the private key (Sensitive in Vercel). Redeploy and submit both forms through the configured host. The backend verifies the token, hostname and form action before forwarding each email. Cloudflare test keys are suitable only for non-production test environments.
 3. In `backend`, run `npm ci`, `npm run build`, `npm run db:migrate`, then `npm start`.
 4. In `frontend`, run `npm ci` and `npm start`. The development app defaults to `http://localhost:5000/api`. Set `REACT_APP_API_URL` to use a different backend.
 

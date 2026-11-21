@@ -12,7 +12,7 @@ function smtpConfiguration() {
 
 export const isEmailConfigured = () => smtpConfiguration() !== null;
 
-export const sendEmail = async (to: string, subject: string, text: string) => {
+export const sendEmail = async (to: string, subject: string, text: string, replyTo?: string) => {
   const config = smtpConfiguration();
   if (!config) throw new Error('SMTP delivery is not configured');
   const { host, port, user, pass, from } = config;
@@ -27,5 +27,5 @@ export const sendEmail = async (to: string, subject: string, text: string) => {
   });
 
   const footer = [brand.name, brand.tagline, brand.attribution].join('\n');
-  return transporter.sendMail({ from, to, subject, text: `${text}\n\n${footer}` });
+  return transporter.sendMail({ from, to, subject, ...(replyTo ? { replyTo } : {}), text: `${text}\n\n${footer}` });
 };
