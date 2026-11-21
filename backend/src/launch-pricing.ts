@@ -15,7 +15,7 @@ export const launchPricing = `
       'Savings, contributions and transactions',
       'Loan management and financial reports',
       'CSV and Excel member import',
-      'Audit history and multiple administrators'
+      'Audit history and staff access'
     ] ELSE p.features END,
     "updatedAt" = now()
   FROM launch WHERE p.slug = launch.slug AND NOT p."customPricing";
