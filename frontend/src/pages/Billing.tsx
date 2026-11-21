@@ -33,7 +33,7 @@ export default function Billing({ publicPricing = false }: { publicPricing?: boo
   const [plans, setPlans] = useState<Plan[]>([]);
   const [state, setState] = useState<BillingState | null>(null);
   const [profile, setProfile] = useState<Record<string, string>>({});
-  const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly');
+  const [cycle, setCycle] = useState<'monthly' | 'annual'>(publicPricing ? 'annual' : 'monthly');
   const [expected, setExpected] = useState('');
   const [gateway, setGateway] = useState('');
   const [selected, setSelected] = useState<Plan | null>(null);
@@ -142,13 +142,16 @@ export default function Billing({ publicPricing = false }: { publicPricing?: boo
       <TextField select size="small" label="Billing cycle" value={cycle} onChange={event => {
         setCycle(event.target.value as typeof cycle); setSelected(null);
       }} sx={{ minWidth: 155 }}>
-        <MenuItem value="monthly">Monthly</MenuItem><MenuItem value="annual">Annual</MenuItem>
+        <MenuItem value="monthly">Monthly</MenuItem><MenuItem value="annual">Annual (recommended)</MenuItem>
       </TextField>
       <TextField size="small" type="number" label="Expected members" value={expected} inputProps={{ min: 0 }}
         onChange={event => { setExpected(event.target.value); setSelected(null); }} />
     </Stack>
+    {publicPricing && <Typography color="text.secondary">No setup fee. Ask us about a 14-day trial for eligible plans.</Typography>}
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,minmax(0,1fr))', lg: 'repeat(3,minmax(0,1fr))' }, gap: 2 }}>
-      {plans.map(plan => <Paper key={plan.slug} variant="outlined" sx={{ p: 3, borderColor: selected?.slug === plan.slug ? 'primary.main' : undefined }}>
+      {plans.map(plan => {
+        const savings = plan.monthlyMinor && plan.annualMinor ? Number(plan.monthlyMinor) * 12 - Number(plan.annualMinor) : 0;
+        return <Paper key={plan.slug} variant="outlined" sx={{ p: 3, borderColor: selected?.slug === plan.slug ? 'primary.main' : undefined }}>
         <Stack spacing={1.3} height="100%">
           <Typography component="h2" variant="h6">{plan.name}</Typography>
           <Stack direction="row" flexWrap="wrap" gap={1}>
@@ -157,22 +160,25 @@ export default function Billing({ publicPricing = false }: { publicPricing?: boo
           </Stack>
           <Typography>{plan.maximumMembers === null ? 'Unlimited members' : `Up to ${plan.maximumMembers} members`}</Typography>
           <Typography variant="h5">{plan.customPricing ? 'Custom pricing' : price(plan) ? naira(price(plan)!) : 'Price unpublished'}</Typography>
+          {cycle === 'annual' && !plan.customPricing && savings > 0 &&
+            <Typography color="success.main">Save {naira(String(savings))} a year{Number(plan.monthlyMinor) * 2 === savings ? ' · Two months free' : ''}</Typography>}
           <Typography color="text.secondary">{plan.description}</Typography>
           {plan.features.map(feature => <Typography key={feature} variant="body2">· {feature}</Typography>)}
           <Box flexGrow={1} />
-          {publicPricing ? <Button component={Link} to="/register">Register cooperative</Button>
+          {plan.customPricing ? <Button component={Link} to="/contact?topic=demo">Contact sales</Button>
+            : publicPricing ? <Button component={Link} to="/register">Register cooperative</Button>
             : <Button variant={selected?.slug === plan.slug ? 'contained' : 'outlined'}
               disabled={busy || !state || plan.customPricing || !price(plan) || (plan.maximumMembers !== null && fit > plan.maximumMembers)}
               onClick={() => setSelected(plan)}>Select {plan.name}</Button>}
         </Stack>
-      </Paper>)}
+      </Paper>; })}
     </Box>
-    {!publicPricing && state && !state.gateways.length && <Alert severity="info">Online payment is unavailable until the platform configures a billing gateway.</Alert>}
+    {!publicPricing && state && !state.gateways.length && <Alert severity="info">Online checkout is currently unavailable.</Alert>}
     {selected && state && <Paper variant="outlined" sx={{ p: 3 }}>
       <Stack spacing={2}>
         <Typography variant="h6">Review checkout</Typography>
         <Typography>{selected.name} · {cycle} · {naira(price(selected)!)} NGN</Typography>
-        <Typography color="text.secondary">Renewal on the same plan extends an active term. An upgrade starts a new term at the full displayed price, with no prorated credit. Downgrades are available after the current paid term ends.</Typography>
+        <Typography color="text.secondary">Renewal on the same plan extends an active term. An upgrade starts a new term at the full displayed price, with no prorated credit. Downgrades are available after the current paid term ends. Review any fees shown by the payment provider before confirming.</Typography>
         <TextField select label="Payment gateway" value={gateway} onChange={event => setGateway(event.target.value)}>
           {state.gateways.map(item => <MenuItem key={item} value={item}>{item === 'paystack' ? 'Paystack' : 'Flutterwave'}</MenuItem>)}
         </TextField>

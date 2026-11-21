@@ -19,7 +19,28 @@ function secretFor(gateway: Gateway) {
     /^\d+$/.test(process.env.SAAS_FLUTTERWAVE_ACCOUNT_ID || '') ? secret : '';
 }
 
-export const availableGateways = () => (['paystack', 'flutterwave'] as const).filter(gateway => secretFor(gateway));
+const production = () => (process.env.VERCEL_ENV || process.env.NODE_ENV) === 'production';
+const gateways = ['paystack', 'flutterwave'] as const;
+export const enabledGateway = (gateway: Gateway) => Boolean(secretFor(gateway));
+export const paystackSigningSecrets = () => [process.env.SAAS_PAYSTACK_WEBHOOK_SECRET, process.env.SAAS_PAYSTACK_PREVIOUS_WEBHOOK_SECRET]
+  .filter((key): key is string => Boolean(key?.startsWith('whsec_') && key.length > 16));
+export const flutterwaveWebhookSecret = () => {
+  const hash = process.env.SAAS_FLUTTERWAVE_WEBHOOK_HASH || '';
+  return hash.length >= (production() ? 32 : 1) ? hash : '';
+};
+
+export const gatewayReadiness = () => gateways.map(gateway => {
+  const apiConfigured = enabledGateway(gateway);
+  const webhookConfigured = gateway === 'paystack'
+    ? (production() ? paystackSigningSecrets().length > 0 : apiConfigured)
+    : Boolean(flutterwaveWebhookSecret());
+  return { gateway, apiConfigured, webhookConfigured };
+});
+
+export const checkoutEnabled = () => !production() || process.env.SAAS_CHECKOUT_ENABLED === 'true';
+export const availableGateways = () => checkoutEnabled()
+  ? gatewayReadiness().filter(item => item.apiConfigured && item.webhookConfigured).map(item => item.gateway)
+  : [];
 
 async function request(gateway: Gateway, path: string, body?: object) {
   const secret = secretFor(gateway);
@@ -72,8 +93,9 @@ export async function verifyGateway(gateway: Gateway, reference: string, amount:
     return { status: 'pending' as const };
   }
   const minor = gateway === 'paystack' ? data.amount : toMinorUnits(data.amount);
+  const charged = gateway === 'paystack' ? minor : toMinorUnits(data.charged_amount);
   const id = typeof data.id === 'string' ? data.id : Number.isSafeInteger(data.id) ? String(data.id) : '';
-  if (data.currency !== 'NGN' || minor !== amount || !/^\d{1,25}$/.test(id) ||
+  if (data.currency !== 'NGN' || minor !== amount || charged < amount || !/^\d{1,25}$/.test(id) ||
       (gateway === 'paystack' ? data.domain !== mode : String(data.account_id) !== process.env.SAAS_FLUTTERWAVE_ACCOUNT_ID)) {
     throw new AppError('The verified payment does not match the expected amount, currency or merchant.', 409);
   }

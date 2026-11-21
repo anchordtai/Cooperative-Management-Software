@@ -14,6 +14,10 @@ const priceInput = (minor: string | null) => minor ? (Number(minor) / 100).toFix
 
 export default function PlatformBilling() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [readiness, setReadiness] = useState<{
+    mode: string; checkoutEnabled: boolean; enforcement: boolean;
+    gateways: Array<{ gateway: string; apiConfigured: boolean; webhookConfigured: boolean; paused: boolean }>;
+  } | null>(null);
   const [paymentRows, setPayments] = useState<Array<{ reference: string; cooperativeName: string; gateway: string; amountMinor: string; status: string }>>([]);
   const [subscriptions, setSubscriptions] = useState<Array<{
     cooperativeId: string; cooperativeName: string; planName: string | null;
@@ -36,11 +40,13 @@ export default function PlatformBilling() {
     Promise.all([
       api.get('/platform/billing/plans'),
       api.get('/platform/billing/payments', { params: { search, status: paymentStatus } }),
-      api.get('/platform/billing/subscriptions', { params: { search } })
+      api.get('/platform/billing/subscriptions', { params: { search } }),
+      api.get('/platform/billing/readiness')
     ])
-      .then(([catalog, history, directory]) => {
+      .then(([catalog, history, directory, configuration]) => {
         if (active) {
           setPlans(catalog.data.data);
+          setReadiness(configuration.data.data);
           setPayments(history.data.data);
           setSubscriptions(directory.data.data);
         }
@@ -60,6 +66,28 @@ export default function PlatformBilling() {
     <Typography component="h1" variant="h4">Platform billing</Typography>
     {error && <Alert severity="error">{error}</Alert>}
     {notice && <Alert severity="success">{notice}</Alert>}
+    {readiness && <Paper variant="outlined" sx={{ p: 3 }}>
+      <Stack spacing={1}>
+        <Typography component="h2" variant="h6">Billing readiness</Typography>
+        <Typography color="text.secondary">
+          Mode {readiness.mode} · New checkout {readiness.checkoutEnabled ? 'enabled' : 'off'} · Enforcement {readiness.enforcement ? 'on' : 'off'}
+        </Typography>
+        {readiness.gateways.map(item => <Stack key={item.gateway} direction={{ xs: 'column', sm: 'row' }}
+          spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+          <Typography>
+            {item.gateway === 'paystack' ? 'Paystack' : 'Flutterwave'} · API {item.apiConfigured ? 'configured' : 'missing'}
+            {' · Webhook '}{item.webhookConfigured ? 'configured' : 'missing'}{item.paused ? ' · Paused' : ''}
+          </Typography>
+          <Button size="small" disabled={busy} onClick={() => void run(
+            () => api.put('/platform/billing/gateways/' + item.gateway, { paused: !item.paused }),
+            item.paused ? 'Gateway pause removed.' : 'New checkouts paused.'
+          )}>{item.paused ? 'Remove pause' : 'Pause new checkouts'}</Button>
+        </Stack>)}
+        <Typography color="text.secondary">
+          {plans.filter(plan => plan.active && !plan.customPricing && (plan.monthlyMinor || plan.annualMinor)).length} plans have at least one published price
+        </Typography>
+      </Stack>
+    </Paper>}
     <Paper variant="outlined" sx={{ p: 3 }}>
       <Stack spacing={2} component="form" onSubmit={event => {
         event.preventDefault();
@@ -68,13 +96,16 @@ export default function PlatformBilling() {
         }), 'Subscription plan updated.');
       }}>
         <Typography variant="h6">Subscription plans</Typography>
+        <Typography color="text.secondary">Saved prices take effect for new checkouts. Existing subscriptions keep their current terms.</Typography>
         <TextField select value={selected?.slug || ''} label="Plan" onChange={event => {
           const plan = plans.find(item => item.slug === event.target.value) || null;
           setSelected(plan);
           setMonthly(priceInput(plan?.monthlyMinor ?? null));
           setAnnual(priceInput(plan?.annualMinor ?? null));
         }}>
-          {plans.map(item => <MenuItem key={item.slug} value={item.slug}>{item.name}</MenuItem>)}
+          {plans.map(item => <MenuItem key={item.slug} value={item.slug}>
+            {item.name} · {item.customPricing ? 'Custom pricing' : item.monthlyMinor ? naira(item.monthlyMinor) + ' per month' : 'Monthly price unpublished'}
+          </MenuItem>)}
         </TextField>
         {selected && <>
           <TextField label="Description" multiline value={selected.description} onChange={event => setSelected({ ...selected, description: event.target.value })} />

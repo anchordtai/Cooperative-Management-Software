@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import sequelize from '../config/database';
 import Member from '../models/Member';
+import Cooperative from '../models/Cooperative';
 import { AppError } from '../middleware/errorHandler';
 import { availableGateways, Gateway, initialize, Mode, paymentMode, verifyGateway } from './billing-gateways';
 import { enqueueBillingEmail } from './billing-notifications';
@@ -12,9 +13,14 @@ interface Payment {
   amountMinor: string; status: string;
 }
 
-export async function checkout(cooperativeId: string, actorId: string, email: string, input: Record<string, unknown>) {
-  const { plan, cycle, gateway, expectedMinor } = input;
-  if (typeof plan !== 'string' || !['monthly', 'annual'].includes(String(cycle)) ||
+export async function checkoutGateways() {
+  const paused = await select<{ gateway: Gateway }>('SELECT gateway FROM "BillingGatewayControls" WHERE paused');
+  return availableGateways().filter(gateway => !paused.some(control => control.gateway === gateway));
+}
+
+export async function checkout(cooperativeId: string, actorId: string, email: string, input: Record<string, unknown> | null | undefined) {
+  const { plan, cycle, gateway, expectedMinor } = input ?? {};
+  if (typeof plan !== 'string' || (cycle !== 'monthly' && cycle !== 'annual') ||
       (gateway !== 'paystack' && gateway !== 'flutterwave') || typeof expectedMinor !== 'string') {
     throw new AppError('Choose a plan, billing cycle and payment gateway.', 400);
   }
@@ -22,6 +28,9 @@ export async function checkout(cooperativeId: string, actorId: string, email: st
   const reference = 'cs-sub-' + randomUUID();
   const amount = await sequelize.transaction(async transaction => {
     const cooperative = await lockCooperative(cooperativeId, transaction);
+    const [control] = await select<{ paused: boolean }>(
+      'SELECT paused FROM "BillingGatewayControls" WHERE gateway = :gateway FOR SHARE', { gateway }, transaction);
+    if (!control || control.paused) throw new AppError('This billing gateway is paused for new checkouts.', 503);
     const required = ['cooperativeType', 'address', 'state', 'country', 'email', 'phone'];
     if (!required.every(key => typeof cooperative.settings[key] === 'string' && String(cooperative.settings[key]).trim())) {
       throw new AppError('Save your cooperative profile before starting checkout.', 409);
@@ -37,6 +46,14 @@ export async function checkout(cooperativeId: string, actorId: string, email: st
         (p.maximumMembers ?? Infinity) <= (term.maximumMembers ?? Infinity)) {
       throw new AppError('Downgrades are available when your current paid term ends.', 409);
     }
+    const [pending] = await select<{ reference: string }>(`
+      SELECT reference FROM "SubscriptionPayments"
+      WHERE "cooperativeId" = :cooperativeId AND mode = :mode AND status = 'pending'
+        AND "createdAt" > now() - interval '15 minutes'
+      ORDER BY "createdAt" DESC LIMIT 1
+    `, { cooperativeId, mode: paymentMode() }, transaction);
+    if (pending) throw new AppError(
+      'A recent checkout is still pending. Verify it in Payment history before trying again, or retry in 15 minutes.', 409);
     await sequelize.query(`
       INSERT INTO "SubscriptionPayments" (reference,"cooperativeId","actorId","planId","planName","maximumMembers",
         "graceDays","expectedRevision",cycle,gateway,mode,"amountMinor",currency)
@@ -62,7 +79,8 @@ export async function settleCheckout(reference: string, cooperativeId?: string, 
   const verified = await verifyGateway(initial.gateway, reference, Number(initial.amountMinor), initial.mode);
   if (verified.status === 'pending') return { status: 'pending' };
   return sequelize.transaction(async transaction => {
-    await lockCooperative(initial.cooperativeId, transaction);
+    const cooperative = await Cooperative.findByPk(initial.cooperativeId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!cooperative) throw new AppError('Billing payment not found.', 404);
     const [payment] = await select<Payment>('SELECT * FROM "SubscriptionPayments" WHERE reference = :reference FOR UPDATE', { reference }, transaction);
     if (payment.status === 'paid' || payment.status === 'review') return { status: payment.status };
     if (verified.status === 'failed') {
@@ -79,10 +97,13 @@ export async function settleCheckout(reference: string, cooperativeId?: string, 
       WHERE key = :key AND "sentAt" IS NULL`, { replacements: { key: 'failed:' + reference }, transaction });
     const term = await currentTerm(payment.cooperativeId, transaction);
     const members = await Member.count({ where: { cooperativeId: payment.cooperativeId }, transaction });
-    if ((term?.revision ?? 0) !== payment.expectedRevision || (payment.maximumMembers !== null && members > payment.maximumMembers)) {
+    const reviewReason = cooperative.suspendedAt ? 'cooperative_suspended'
+      : (term?.revision ?? 0) !== payment.expectedRevision ? 'subscription_changed'
+      : payment.maximumMembers !== null && members > payment.maximumMembers ? 'plan_capacity_exceeded' : null;
+    if (reviewReason) {
       await sequelize.query(`UPDATE "SubscriptionPayments" SET status = 'review', "providerId" = :providerId, "paidAt" = now()
         WHERE reference = :reference`, { replacements: { reference, providerId: verified.id }, transaction });
-      await billingEvent('payment.requires_review', payment.actorId, payment.cooperativeId, reference, {}, transaction);
+      await billingEvent('payment.requires_review', payment.actorId, payment.cooperativeId, reference, { reason: reviewReason }, transaction);
       return { status: 'review' };
     }
     const startsAt = term?.status === 'active' && term.planId === payment.planId ? term.endsAt : new Date();

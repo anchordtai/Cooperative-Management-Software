@@ -106,6 +106,11 @@ test('platform owner activates privately, verifies each sign-in and controls ten
   const billingDirectory = '/platform/billing/subscriptions?search=' + cooperative.id;
   await tenant(billingDirectory, 'GET', undefined, 403);
   assert.equal((await owner(billingDirectory)).data[0].status, 'unsubscribed');
+  await tenant('/platform/billing/readiness', 'GET', undefined, 403);
+  const readiness = (await owner('/platform/billing/readiness')).data;
+  assert.deepEqual(readiness.gateways.map(row => row.gateway).sort(), ['flutterwave', 'paystack']);
+  await tenant('/platform/billing/gateways/flutterwave', 'PUT', { paused: true }, 403);
+  await owner('/platform/billing/gateways/flutterwave', 'PUT', { paused: 'true' }, 400);
   const growth = (await owner('/platform/billing/plans')).data.find(plan => plan.slug === 'growth');
   await owner('/platform/billing/plans/growth', 'PUT', { ...growth, maximumMembers: 100 }, 409);
   await owner('/platform/billing/plans/growth', 'PUT', { ...growth, trialDays: 7 });

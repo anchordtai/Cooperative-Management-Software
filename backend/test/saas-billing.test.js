@@ -28,8 +28,9 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   await sequelize.query(`UPDATE "SubscriptionPlans" SET "monthlyMinor" = 12345, "annualMinor" = 111111,
     "maximumMembers" = 1, "graceDays" = 3 WHERE slug = 'seed'`);
   t.after(async () => {
-    await sequelize.query(`UPDATE "SubscriptionPlans" SET "monthlyMinor" = NULL, "annualMinor" = NULL,
+    await sequelize.query(`UPDATE "SubscriptionPlans" SET "monthlyMinor" = 750000, "annualMinor" = 7500000,
       "maximumMembers" = 100, "graceDays" = 0 WHERE slug = 'seed'`);
+    await sequelize.query(`UPDATE "BillingGatewayControls" SET paused = false WHERE gateway = 'paystack'`);
     await sequelize.close();
   });
   const nativeFetch = global.fetch;
@@ -37,6 +38,7 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   let wrongAmount = false;
   let wrongCurrency = false;
   let wrongMerchant = false;
+  let undercharged = false;
   let wrongReference = false;
   t.mock.method(global, 'fetch', async (url, options = {}) => {
     if (typeof url !== 'string' || !/^https:\/\/api\.(paystack\.co|flutterwave\.com)\//.test(url)) return nativeFetch(url, options);
@@ -59,7 +61,8 @@ test('tenant checkout, verification, capacity and import preserve subscription i
     return Response.json({ status: paystack ? true : 'success', data: {
       reference: wrongReference ? 'different' : reference, tx_ref: reference, status, id,
       domain: 'test', account_id: wrongMerchant ? '95' : '44', currency: wrongCurrency ? 'USD' : 'NGN',
-      amount: wrongAmount ? data.amount + 1 : data.amount
+      amount: wrongAmount ? Number(data.amount) + 1 : data.amount,
+      charged_amount: undercharged ? '1.00' : data.amount
     } });
   });
   const server = app.listen(0, '127.0.0.1');
@@ -86,6 +89,13 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   await a('/auth/login', 'POST', { email: admin.email, password });
   await b('/auth/login', 'POST', { email: outsider.email, password });
   assert.deepEqual((await a('/billing/plans')).data.map(plan => plan.name), ['Seed', 'Growth', 'Scale', 'Enterprise', 'Enterprise Plus']);
+  const plans = (await a('/billing/plans')).data;
+  for (const [slug, amount] of [['growth', '1500000'], ['scale', '2500000'], ['enterprise', '4000000']]) {
+    const plan = plans.find(row => row.slug === slug);
+    assert.equal(plan.monthlyMinor, amount);
+    assert.equal(plan.annualMinor, String(Number(amount) * 10));
+    assert.equal(typeof plan.trialDays, 'number');
+  }
   assert.equal((await a('/billing')).data.allowed, false);
   await a('/members', 'GET', undefined, 402);
   await a('/platform/billing/plans', 'GET', undefined, 403);
@@ -94,6 +104,10 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   await a('/billing/profile', 'PUT', profile);
   await a('/billing/checkout', 'POST', { ...draft, expectedMinor: '1' }, 409);
   const { reference } = (await a('/billing/checkout', 'POST', draft, 201)).data;
+  await a('/billing/checkout', 'POST', { ...draft, gateway: 'flutterwave' }, 409);
+  assert.equal(remote.size, 1);
+  await sequelize.query(`UPDATE "BillingGatewayControls" SET paused = true WHERE gateway = 'paystack'`);
+  await a('/billing/checkout', 'POST', draft, 503);
   const check = '/billing/verify/' + reference;
   await b(check, 'POST', {}, 404);
   wrongAmount = true;
@@ -108,8 +122,16 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   const payload = JSON.stringify({ event: 'charge.success', data: { reference } });
   await webhook('/billing/webhooks/paystack', 'POST', payload, 401);
   const signature = createHmac('sha512', process.env.SAAS_PAYSTACK_SECRET_KEY).update(payload).digest('hex');
-  await webhook('/billing/webhooks/paystack', 'POST', payload, 200, { 'x-paystack-signature': signature });
+  const signingKey = 'whsec_current_billing_fixture';
+  process.env.SAAS_PAYSTACK_WEBHOOK_SECRET = signingKey;
+  await webhook('/billing/webhooks/paystack', 'POST', payload, 401, { 'x-paystack-signature': signature });
+  const signed = at => 't=' + at + ',v1=whk_fixture:' + createHmac('sha512', signingKey).update(at + '.').update(payload).digest('hex');
+  const timestamp = Math.floor(Date.now() / 1000);
+  await webhook('/billing/webhooks/paystack', 'POST', payload, 401, { 'paystack-signature': signed(timestamp - 301) });
+  await webhook('/billing/webhooks/paystack', 'POST', payload, 200, { 'paystack-signature': signed(timestamp) });
+  await webhook('/billing/webhooks/paystack', 'POST', payload, 200, { 'paystack-signature': signed(timestamp) });
   assert.equal((await a(check, 'POST', {})).data.status, 'paid');
+  await sequelize.query(`UPDATE "BillingGatewayControls" SET paused = false WHERE gateway = 'paystack'`);
   const active = (await a('/billing')).data;
   assert.equal(active.term.status, 'active');
   assert.equal(active.maximum, 1);
@@ -141,15 +163,28 @@ test('tenant checkout, verification, capacity and import preserve subscription i
   wrongMerchant = true;
   await a(renewalPath, 'POST', {}, 409);
   wrongMerchant = false;
+  undercharged = true;
+  await a(renewalPath, 'POST', {}, 409);
+  undercharged = false;
+  const notification = JSON.stringify({ event: 'charge.completed', data: { tx_ref: renewal } });
   remote.get(renewal).state = 'pending';
+  await webhook('/billing/webhooks/flutterwave', 'POST', notification, 503, { 'verif-hash': 'local-flutterwave-hash' });
   assert.equal((await a(renewalPath, 'POST', {})).data.status, 'pending');
   remote.get(renewal).state = 'failed';
   assert.equal((await a(renewalPath, 'POST', {})).data.status, 'failed');
   remote.get(renewal).state = 'paid';
-  const notification = JSON.stringify({ event: 'charge.completed', data: { tx_ref: renewal } });
   await webhook('/billing/webhooks/flutterwave', 'POST', notification, 200, { 'verif-hash': 'local-flutterwave-hash' });
   assert.equal((await a(renewalPath, 'POST', {})).data.status, 'paid');
   assert(new Date((await a('/billing')).data.term.endsAt) > new Date(active.term.endsAt));
+  const suspended = (await a('/billing/checkout', 'POST', { ...draft, gateway: 'flutterwave' }, 201)).data.reference;
+  await tenant.update({ suspendedAt: new Date() });
+  await webhook('/billing/webhooks/flutterwave', 'POST',
+    JSON.stringify({ event: 'charge.completed', data: { tx_ref: suspended } }), 200,
+    { 'verif-hash': 'local-flutterwave-hash' });
+  const [review] = await sequelize.query(`SELECT status FROM "SubscriptionPayments" WHERE reference = :reference`,
+    { replacements: { reference: suspended }, type: 'SELECT' });
+  assert.equal(review.status, 'review');
+  await tenant.update({ suspendedAt: null });
   await a('/billing/cancel-at-expiry', 'POST', {});
   await sequelize.query(`UPDATE "CooperativeSubscriptions" SET "startsAt" = now() - interval '36 days',
     "endsAt" = now() - interval '1 day' WHERE "cooperativeId" = :cooperativeId`, { replacements: { cooperativeId: tenant.id } });

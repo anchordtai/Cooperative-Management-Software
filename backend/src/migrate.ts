@@ -1,6 +1,7 @@
 import sequelize from './config/database';
 import './models';
 import './models/Session';
+import { launchPricing } from './launch-pricing';
 import { saasSchema } from './saas-schema';
 
 async function migrate() {
@@ -177,6 +178,11 @@ async function migrate() {
     if (saas.length === 0) {
       await run(saasSchema);
       await run(`INSERT INTO "SchemaMigrations" (version) VALUES ('006_saas_billing')`);
+    }
+    const [pricing] = await run(`SELECT version FROM "SchemaMigrations" WHERE version = '007_launch_pricing'`);
+    if (pricing.length === 0) {
+      await run(launchPricing);
+      await run(`INSERT INTO "SchemaMigrations" (version) VALUES ('007_launch_pricing')`);
     }
   });
 }

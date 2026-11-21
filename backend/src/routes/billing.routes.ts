@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { RequestHandler, Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import PDFDocument from 'pdfkit';
@@ -9,8 +9,10 @@ import { AppError } from '../middleware/errorHandler';
 import Cooperative from '../models/Cooperative';
 import Member from '../models/Member';
 import { drainBillingEmails, queueBillingReminders } from '../services/billing-notifications';
-import { checkout, settleCheckout } from '../services/billing-checkout';
-import { availableGateways, Gateway } from '../services/billing-gateways';
+import { checkout, checkoutGateways, settleCheckout } from '../services/billing-checkout';
+import { checkoutEnabled, enabledGateway, flutterwaveWebhookSecret, Gateway, gatewayReadiness,
+  paymentMode, paystackSigningSecrets } from '../services/billing-gateways';
+import { validPaystackSignature } from '../services/paystack';
 import { money } from '../services/finance';
 import { billingEvent, capacity, currentTerm, listPlans, lockCooperative, select, termStatus } from '../services/subscriptions';
 
@@ -34,13 +36,14 @@ billingRoutes.get('/access', async (req, res, next) => {
 billingRoutes.get('/', tenantAdmin, async (req, res, next) => {
   try {
     const cooperativeId = req.user!.cooperativeId;
-    const [state, history, cooperative] = await Promise.all([
+    const [state, history, cooperative, gateways] = await Promise.all([
       capacity(cooperativeId),
       select(`SELECT ${billingFields} FROM "SubscriptionPayments" WHERE "cooperativeId" = :cooperativeId ORDER BY "createdAt" DESC, reference LIMIT 100`, { cooperativeId }),
-      Cooperative.findByPk(cooperativeId)
+      Cooperative.findByPk(cooperativeId),
+      checkoutGateways()
     ]);
     const settings = cooperative!.settings || {};
-    res.json({ data: { ...state, history, gateways: availableGateways(),
+    res.json({ data: { ...state, history, gateways,
       profile: { name: cooperative!.name, ...Object.fromEntries(profileFields.map(key => [key, settings[key] || ''])) } } });
   } catch (error) { next(error); }
 });
@@ -118,6 +121,37 @@ billingRoutes.get('/receipt/:reference', tenantAdmin, async (req, res, next) => 
 });
 
 platformBilling.use(authenticateOwner);
+platformBilling.get('/readiness', async (_req, res, next) => {
+  try {
+    const controls = await select<{ gateway: Gateway; paused: boolean }>('SELECT gateway, paused FROM "BillingGatewayControls"');
+    res.json({ data: {
+      mode: process.env.SAAS_PAYMENT_MODE === 'live' || process.env.SAAS_PAYMENT_MODE === 'test' ? paymentMode() : 'unconfigured',
+      checkoutEnabled: checkoutEnabled(),
+      enforcement: process.env.SAAS_ENFORCE_SUBSCRIPTIONS === 'true',
+      gateways: gatewayReadiness().map(item => ({ ...item, paused: controls.find(row => row.gateway === item.gateway)?.paused ?? true }))
+    } });
+  } catch (error) { next(error); }
+});
+
+platformBilling.put('/gateways/:gateway', async (req, res, next) => {
+  try {
+    const { gateway } = req.params;
+    const paused = req.body?.paused;
+    if ((gateway !== 'paystack' && gateway !== 'flutterwave') || typeof paused !== 'boolean') {
+      throw new AppError('Select a billing gateway and its availability.', 400);
+    }
+    await sequelize.transaction(async transaction => {
+      const rows = await select(`
+        UPDATE "BillingGatewayControls" SET paused = :paused WHERE gateway = :gateway AND paused <> :paused
+        RETURNING gateway
+      `, { gateway, paused }, transaction);
+      if (rows.length) await billingEvent(paused ? 'gateway.paused' : 'gateway.resumed',
+        req.platformOwner!.id, null, null, { gateway }, transaction);
+    });
+    res.json({ message: paused ? 'New checkouts paused.' : 'Gateway pause removed.' });
+  } catch (error) { next(error); }
+});
+
 platformBilling.get('/plans', async (_req, res, next) => {
   try { res.json({ data: await listPlans(true) }); } catch (error) { next(error); }
 });
@@ -219,21 +253,33 @@ const match = (received: string | undefined, expected: string) =>
 export function billingWebhook(gateway: Gateway): RequestHandler {
   return async (req, res, next) => {
     try {
-      if (!Buffer.isBuffer(req.body) || !availableGateways().includes(gateway)) throw new AppError('Invalid gateway webhook.', 401);
+      if (!Buffer.isBuffer(req.body) || !enabledGateway(gateway)) throw new AppError('Invalid gateway webhook.', 401);
+      const signingKeys = paystackSigningSecrets();
+      const allowLegacyPaystack = paymentMode() === 'test' && signingKeys.length === 0;
       const valid = gateway === 'paystack'
-        ? match(req.get('x-paystack-signature'), createHmac('sha512', process.env.SAAS_PAYSTACK_SECRET_KEY!).update(req.body).digest('hex'))
-        : match(req.get('verif-hash'), process.env.SAAS_FLUTTERWAVE_WEBHOOK_HASH || '');
+        ? (allowLegacyPaystack || signingKeys.length > 0) && validPaystackSignature(
+          req.body, allowLegacyPaystack ? req.get('x-paystack-signature') : undefined,
+          req.get('paystack-signature'), process.env.SAAS_PAYSTACK_SECRET_KEY!, signingKeys)
+        : match(req.get('verif-hash'), flutterwaveWebhookSecret());
       if (!valid) throw new AppError('Invalid gateway webhook.', 401);
       const event = JSON.parse(req.body.toString('utf8'));
+      if (!event || typeof event !== 'object') throw new AppError('Invalid gateway webhook.', 400);
       const reference = gateway === 'paystack' ? event.data?.reference : event.data?.tx_ref;
-      if (typeof reference === 'string' && reference.startsWith('cs-sub-') &&
+      if (typeof reference === 'string' && /^cs-sub-[a-f0-9-]{36}$/.test(reference) &&
           (gateway === 'paystack' ? event.event === 'charge.success' : event.event === 'charge.completed')) {
         try {
+          const digest = createHash('sha256').update(req.body).digest('hex');
+          const [recorded] = await select(`SELECT 1 FROM "BillingWebhookEvents" WHERE gateway = :gateway AND digest = :digest AND outcome IN ('paid', 'review')`,
+            { gateway, digest });
+          if (recorded) { res.sendStatus(200); return; }
           const { status } = await settleCheckout(reference, undefined, gateway);
+          if (status !== 'paid' && status !== 'review') {
+            throw new AppError('The payment is still awaiting a final confirmation.', 503);
+          }
           await sequelize.query(`
             INSERT INTO "BillingWebhookEvents" (gateway,digest,reference,outcome) VALUES (:gateway,:digest,:reference,:status)
             ON CONFLICT (gateway,digest) DO NOTHING
-          `, { replacements: { gateway, digest: createHash('sha256').update(req.body).digest('hex'), reference, status } });
+          `, { replacements: { gateway, digest, reference, status } });
         } catch (error) {
           if (!(error instanceof AppError && error.statusCode === 404)) throw error;
         }
